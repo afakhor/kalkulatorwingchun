@@ -1,0 +1,32 @@
+name: Dependency Check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+        - cron: '0 0 * * 1'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+            - uses: actions/checkout@v4
+
+            - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.0'
+          channel: 'stable'
+
+            - name: Cek pubspec.yaml valid atau tidak
+        run: flutter pub get --dry-run
+
+            - name: Cek dependency bisa di-resolve semua
+        run: flutter pub get
+
+            - name: List dependency yang sudah ketinggalan
+        run: flutter pub outdated || true
+
+            - name: Cek ada package yang sudah tidak didukung
+        run: flutter pub deps
