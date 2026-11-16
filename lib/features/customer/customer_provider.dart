@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'po_models.dart';
+import '../po/po_models.dart';
 
 // Daftar Orang - cari by namaOrang, bukan ID, karena P2P ingatnya nama orang
 // TANPA DUMMY - list kosong sampai user tambah orang beneran
