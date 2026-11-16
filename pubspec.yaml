@@ -22,13 +22,13 @@ dependencies:
   share_plus: ^10.1.2
   url_launcher: ^6.3.1
   speech_to_text: ^7.0.0
-  image_picker: ^5.0.0
+  image_picker: ^1.1.2
   vibration: ^2.0.0
-  audioplayers: ^6.4.0
-  flutter_lints: ^5.0.0
+  audioplayers: ^6.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^5.0.0
   build_runner: ^2.4.13
   freezed: ^2.5.7
   json_serializable: ^6.8.0
