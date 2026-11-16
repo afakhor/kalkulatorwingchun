@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -14,8 +15,6 @@ class HalamanInputPO extends ConsumerStatefulWidget {
 
 class _S extends ConsumerState<HalamanInputPO> {
   final _ctrl = TextEditingController();
-  // setState HANYA untuk animasi keyboard / fokus - bukan logika PO
-  bool _fokus = false;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +31,6 @@ class _S extends ConsumerState<HalamanInputPO> {
               Text('Tulis cepat: 2x semen 50kg 50rb', style: AppTheme.judulTangan(22)),
               TextField(
                 controller: _ctrl,
-                onTap: () => setState(() => _fokus = true),
                 keyboardType: TextInputType.text,
                 decoration: const InputDecoration(hintText: '2x kaos 50rb', border: OutlineInputBorder()),
                 onSubmitted: (v) {
