@@ -19,7 +19,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        multiDexEnabled = true // Mencegah crash saat inisialisasi method besar
+        multiDexEnabled = true
     }
 
     buildTypes {
@@ -27,11 +27,10 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
-}
 
-kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    // --- PERBAIKAN ADA DI SINI ---
+    kotlinOptions {
+        jvmTarget = "17"
     }
 }
 
