@@ -545,14 +545,14 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           ),
                         ),
                     const SizedBox(height: 12),
-                    Row(
+                        Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text("Satuan", style: TextStyle(fontWeight: FontWeight.bold)),
                         ElevatedButton(
                           onPressed: () {
                             setSheet(() {
-                              satuanList.add({"satuan": "dus", "dasar": false, "isi": "1"});
+                              satuanList.add({"satuan": "", "dasar": false, "isi": "1"});
                             });
                           },
                           child: const Text("+Tambah Satuan", style: TextStyle(fontSize: 11)),
@@ -576,21 +576,22 @@ class _S extends ConsumerState<HomeDaftarPO> {
                         ),
                         child: Row(
                           children: [
-                            // FIX 1b: DropdownButton juga pakai initialValue
-                            DropdownButton<String>(
-                              initialValue: "${s["satuan"]}",
-                              items: ["pcs", "dus", "sak", "batang", "kaleng"]
-                                  .map((x) => DropdownMenuItem(value: x, child: Text(x)))
-                                  .toList(),
-                              onChanged: (v) {
-                                if (v != null) {
-                                  setSheet(() {
-                                    satuanList[e.key]["satuan"] = v;
-                                  });
-                                }
-                              },
+                            // SATUAN - INPUT MANUAL, BUKAN DROPDOWN LAGI
+                            SizedBox(
+                              width: 72,
+                              child: TextField(
+                                controller: TextEditingController(text: "${s["satuan"]}"),
+                                decoration: const InputDecoration(
+                                  hintText: "pcs",
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                onChanged: (v) {
+                                  satuanList[e.key]["satuan"] = v;
+                                },
+                              ),
                             ),
-                            // FIX 2 & 3: Radio groupValue/onChanged -> RadioGroup
+                            // RADIO DASAR - tetap RadioGroup
                             RadioGroup<bool>(
                               groupValue: dasar,
                               onChanged: (bool? v) {
@@ -712,7 +713,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
       },
     );
   }
-
   Widget tombol(String label, {Color? bg, Color? fg, bool besar = false}) {
     return Expanded(
       child: Padding(
