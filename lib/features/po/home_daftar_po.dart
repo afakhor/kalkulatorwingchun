@@ -61,11 +61,14 @@ class _S extends ConsumerState<HomeDaftarPO> {
     return "${persen.toStringAsFixed(1)}%";
   }
 
-  void pencet(String t) {
+    void pencet(String t) {
     HapticFeedback.lightImpact();
     setState(() {
       if (t == "C" || t == "AC") {
-        layar = "0"; _operator = ""; _angka1 = 0; layarKetik = "";
+        layar = "0";
+        _operator = "";
+        _angka1 = 0;
+        layarKetik = "";
       } else if (["+", "-", "x", "/"].contains(t)) {
         _angka1 = double.tryParse(layar) ?? 0;
         _operator = t;
@@ -73,30 +76,50 @@ class _S extends ConsumerState<HomeDaftarPO> {
       } else if (t == "=") {
         final a2 = double.tryParse(layar) ?? 0;
         double h = 0;
-        if (_operator == "+") h = _angka1 + a2;
-        if (_operator == "-") h = _angka1 - a2;
-        if (_operator == "x") h = _angka1 * a2;
-        if (_operator == "/") h = a2 == 0 ? 0 : _angka1 / a2;
+        if (_operator == "+") {
+          h = _angka1 + a2;
+        }
+        if (_operator == "-") {
+          h = _angka1 - a2;
+        }
+        if (_operator == "x") {
+          h = _angka1 * a2;
+        }
+        if (_operator == "/") {
+          if (a2 == 0) {
+            h = 0;
+          } else {
+            h = _angka1 / a2;
+          }
+        }
         layar = h.toStringAsFixed(0);
         _operator = "";
       } else if (t == "M+") {
-        // Masukkan ke PO - ini tombol hijau yang kamu lingkarin
-        final item = parseInputCepat(layarKetik.isEmpty ? "${layar}x ${namaCtrl.text} ${hargaCtrl.text}" : layarKetik);
+        final item = parseInputCepat(layarKetik.isEmpty ? "$layar x ${namaCtrl.text} ${hargaCtrl.text}" : layarKetik);
         if (item != null) {
           ref.read(poProvider.notifier).tambahItem(item);
-        } else if (namaCtrl.text.isNotEmpty) {
-          final qty = int.tryParse(layar) ?? 1;
-          final harga = int.tryParse(hargaCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-          final it = parseInputCepat("$qty x ${namaCtrl.text} $harga");
-          if (it != null) ref.read(poProvider.notifier).tambahItem(it);
+        } else {
+          if (namaCtrl.text.isNotEmpty) {
+            final qty = int.tryParse(layar) ?? 1;
+            final harga = int.tryParse(hargaCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+            final it = parseInputCepat("$qty x ${namaCtrl.text} $harga");
+            if (it != null) {
+              ref.read(poProvider.notifier).tambahItem(it);
+            }
+          }
         }
         layar = "0";
       } else if (t == "120") {
         layar = ((double.tryParse(layar) ?? 0) + 120).toStringAsFixed(0);
-      } else if (t == "0" || t == "00" || t == "000" || RegExp(r'[0-9]').hasMatch(t)) {
-        if (layar == "0") layar = t;
-        else layar += t;
-        if (t.length <= 1) layarKetik += t;
+      } else {
+        if (layar == "0") {
+          layar = t;
+        } else {
+          layar += t;
+        }
+        if (t.length <= 1) {
+          layarKetik += t;
+        }
       }
     });
   }
