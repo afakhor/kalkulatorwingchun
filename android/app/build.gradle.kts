@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("kotlin-android") // Pastikan plugin kotlin-android aktif di app level
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -27,10 +28,12 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+}
 
-    // --- PERBAIKAN ADA DI SINI ---
-    kotlinOptions {
-        jvmTarget = "17"
+// Gunakan ekstensi ekstender kotlin standar untuk Kotlin DSL (.kts)
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
