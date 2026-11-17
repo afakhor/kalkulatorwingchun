@@ -17,14 +17,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
   String op = "";
   double angka1 = 0;
 
-  // Barang yang dipilih jadi acuan
   Map<String, String>? barangDipilih;
   final List<Map<String, dynamic>> daftarBarang = [];
-
-  // Filter LS
   String queryLS = "";
 
-  // FORM TAMBAH BARANG - model centang hijau
   final kodeCtrl = TextEditingController();
   final namaCtrl = TextEditingController();
   String kategoriPilih = "Semen";
@@ -53,9 +49,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     return o - d;
   }
 
-  double get manual {
-    return double.tryParse(layar) ?? 0;
-  }
+  double get manual => double.tryParse(layar) ?? 0;
 
   double get persen {
     if (hargaAcuan == 0) {
@@ -180,12 +174,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
     });
   }
 
-  // ===== LS - LIST + SEARCH + AUTOCOMPLETE =====
   void bukaListLS() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx2, setSheet) {
@@ -199,10 +194,14 @@ class _S extends ConsumerState<HomeDaftarPO> {
               }
               return nama.contains(q) || kode.contains(q) || kat.contains(q);
             }).toList();
-            // Auto suggestions: 5 teratas yang mirip
             final suggestions = filtered.take(5).toList();
             return Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 16, right: 16, top: 16),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 16,
+                right: 16,
+                top: 16,
+              ),
               child: SizedBox(
                 height: 520,
                 child: Column(
@@ -211,20 +210,33 @@ class _S extends ConsumerState<HomeDaftarPO> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("LS - List Barang", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        const Text(
+                          "LS - List Barang",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
                         Row(
                           children: [
-                            TextButton(onPressed: () {
-                              Navigator.pop(ctx);
-                              bukaFormTambahBarang();
-                            }, child: const Text("+ Tambah Barang")),
-                            IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                bukaFormTambahBarang();
+                              },
+                              child: const Text("+ Tambah Barang"),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => Navigator.pop(ctx),
+                            ),
                           ],
                         ),
                       ],
                     ),
                     TextField(
-                      decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: "Cari kode / nama / kategori...", border: OutlineInputBorder()),
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        hintText: "Cari kode / nama / kategori...",
+                        border: OutlineInputBorder(),
+                      ),
                       onChanged: (v) {
                         setSheet(() {
                           queryLS = v;
@@ -236,37 +248,72 @@ class _S extends ConsumerState<HomeDaftarPO> {
                     ),
                     const SizedBox(height: 8),
                     if (suggestions.isNotEmpty) ...[
-                      const Text("Auto Suggestion:", style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      const Text(
+                        "Auto Suggestion:",
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
                       const SizedBox(height: 4),
                       Wrap(
                         spacing: 6,
-                        children: suggestions.map((b) => ActionChip(label: Text("${b["nama"]}", style: const TextStyle(fontSize: 11)), onPressed: () {
-                          setState(() {
-                            barangDipilih = Map<String, String>.from({"kode": "${b["kode"]}", "nama": "${b["nama"]}", "kategori": "${b["kategori"]}", "harga1": "${b["harga1"]}"});
-                          });
-                          Navigator.pop(ctx);
-                        })).toList(),
+                        children: suggestions
+                            .map(
+                              (b) => ActionChip(
+                                label: Text(
+                                  "${b["nama"]}",
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    barangDipilih = {
+                                      "kode": "${b["kode"]}",
+                                      "nama": "${b["nama"]}",
+                                      "kategori": "${b["kategori"]}",
+                                      "harga1": "${b["harga1"]}",
+                                    };
+                                  });
+                                  Navigator.pop(ctx);
+                                },
+                              ),
+                            )
+                            .toList(),
                       ),
                       const SizedBox(height: 8),
                       const Divider(color: Colors.blue, thickness: 2),
                     ],
                     Expanded(
                       child: filtered.isEmpty
-                          ? const Center(child: Text("Belum ada barang. Tap + Tambah Barang."))
+                          ? const Center(
+                              child: Text("Belum ada barang. Tap + Tambah Barang."),
+                            )
                           : ListView.builder(
                               itemCount: filtered.length,
                               itemBuilder: (_, i) {
                                 final b = filtered[i];
-                                final aktif = barangDipilih != null && barangDipilih!["kode"] == b["kode"];
+                                final aktif = barangDipilih != null &&
+                                    barangDipilih!["kode"] == b["kode"];
                                 return ListTile(
-                                  leading: CircleAvatar(child: Text("${b["nama"]}".isEmpty ? "?" : "${b["nama"]}"[0])),
+                                  leading: CircleAvatar(
+                                    child: Text(
+                                      "${b["nama"]}".isEmpty ? "?" : "${b["nama"]}"[0],
+                                    ),
+                                  ),
                                   title: Text("${b["nama"]}"),
-                                  subtitle: Text("${b["kode"]} • ${b["kategori"]} • ${b["satuan"] ?? "pcs"}"),
-                                  trailing: Text(formatRupiah(int.tryParse("${b["harga1"]}") ?? 0), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  subtitle: Text(
+                                    "${b["kode"]} • ${b["kategori"]} • ${b["satuan"] ?? "pcs"}",
+                                  ),
+                                  trailing: Text(
+                                    formatRupiah(int.tryParse("${b["harga1"]}") ?? 0),
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
                                   tileColor: aktif ? Colors.green.shade100 : null,
                                   onTap: () {
                                     setState(() {
-                                      barangDipilih = {"kode": "${b["kode"]}", "nama": "${b["nama"]}", "kategori": "${b["kategori"]}", "harga1": "${b["harga1"]}"};
+                                      barangDipilih = {
+                                        "kode": "${b["kode"]}",
+                                        "nama": "${b["nama"]}",
+                                        "kategori": "${b["kategori"]}",
+                                        "harga1": "${b["harga1"]}",
+                                      };
                                     });
                                     Navigator.pop(ctx);
                                   },
@@ -284,17 +331,23 @@ class _S extends ConsumerState<HomeDaftarPO> {
     );
   }
 
-  // ===== FORM TAMBAH BARANG - MODEL CENTANG HIJAU =====
   void bukaFormTambahBarang() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx2, setSheet) {
             return Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 16, right: 16, top: 16),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 16,
+                right: 16,
+                top: 16,
+              ),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -302,128 +355,233 @@ class _S extends ConsumerState<HomeDaftarPO> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("Tambah Barang", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                        const Text(
+                          "Tambah Barang",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Row(children: [
-                      Expanded(child: TextField(controller: kodeCtrl, decoration: const InputDecoration(labelText: "Code *", hintText: "EL011", border: OutlineInputBorder()))),
-                      const SizedBox(width: 8),
-                      Expanded(child: TextField(controller: namaCtrl, decoration: const InputDecoration(labelText: "Name *", hintText: "Nama barang", border: OutlineInputBorder()))),
-                    ]),
-                    const SizedBox(height: 12),
-                    Row(children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text("Category • dropdown + tambah/delete", style: TextStyle(fontSize: 11)),
-                            const SizedBox(height: 4),
-                            DropdownButtonFormField<String>(
-                              value: kategoriPilih,
-                              decoration: const InputDecoration(border: OutlineInputBorder()),
-                              items: listKategori.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                              onChanged: (v) {
-                                if (v != null) {
-                                  setSheet(() {
-                                    kategoriPilih = v;
-                                  });
-                                }
-                              },
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: kodeCtrl,
+                            decoration: const InputDecoration(
+                              labelText: "Code *",
+                              hintText: "EL011",
+                              border: OutlineInputBorder(),
                             ),
-                            Row(
-                              children: [
-                                Expanded(child: TextField(controller: kategoriBaruCtrl, decoration: const InputDecoration(hintText: "Kategori baru", isDense: true))),
-                                IconButton(icon: const Icon(Icons.add), onPressed: () {
-                                  if (kategoriBaruCtrl.text.isNotEmpty) {
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: namaCtrl,
+                            decoration: const InputDecoration(
+                              labelText: "Name *",
+                              hintText: "Nama barang",
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Category • dropdown + tambah/delete",
+                                style: TextStyle(fontSize: 11),
+                              ),
+                              const SizedBox(height: 4),
+                              // FIX 1: value -> initialValue
+                              DropdownButtonFormField<String>(
+                                initialValue: kategoriPilih,
+                                decoration: const InputDecoration(
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: listKategori
+                                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                                    .toList(),
+                                onChanged: (v) {
+                                  if (v != null) {
                                     setSheet(() {
-                                      listKategori.add(kategoriBaruCtrl.text);
-                                      kategoriPilih = kategoriBaruCtrl.text;
-                                      kategoriBaruCtrl.clear();
+                                      kategoriPilih = v;
                                     });
                                   }
-                                }),
-                                IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
-                                  setSheet(() {
-                                    if (listKategori.length > 1) {
-                                      listKategori.remove(kategoriPilih);
-                                      kategoriPilih = listKategori.first;
-                                    }
-                                  });
-                                }),
-                              ],
-                            ),
-                          ],
+                                },
+                              ),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: kategoriBaruCtrl,
+                                      decoration: const InputDecoration(
+                                        hintText: "Kategori baru",
+                                        isDense: true,
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.add),
+                                    onPressed: () {
+                                      if (kategoriBaruCtrl.text.isNotEmpty) {
+                                        setSheet(() {
+                                          listKategori.add(kategoriBaruCtrl.text);
+                                          kategoriPilih = kategoriBaruCtrl.text;
+                                          kategoriBaruCtrl.clear();
+                                        });
+                                      }
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.red),
+                                    onPressed: () {
+                                      setSheet(() {
+                                        if (listKategori.length > 1) {
+                                          listKategori.remove(kategoriPilih);
+                                          kategoriPilih = listKategori.first;
+                                        }
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(child: TextField(controller: unitCtrl, decoration: const InputDecoration(labelText: "Unit", border: OutlineInputBorder()))),
-                    ]),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: unitCtrl,
+                            decoration: const InputDecoration(
+                              labelText: "Unit",
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 12),
-                    // HARGA 1 SAJA - Harga 2,3 + Gambar Master DIHAPUS sesuai coret merah
-                    const Text("Harga 1 • Acuan 100%", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green)),
+                    const Text(
+                      "Harga 1 • Acuan 100%",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    TextField(controller: harga1Ctrl, keyboardType: TextInputType.number, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: "0")),
+                    TextField(
+                      controller: harga1Ctrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: "0",
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: const Color(0xFFFFF8C5), borderRadius: BorderRadius.circular(8)),
-                      child: const Text("Harga 1 ini yang jadi acuan prosentase 100% sedang harga 2 dan 3 tidak perlu ditampilkan, input manual edit harga 1 menjadi harga 2 dan 3 benar sudah ada di PO", style: TextStyle(fontSize: 11)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF8C5),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        "Harga 1 ini yang jadi acuan prosentase 100% sedang harga 2 dan 3 tidak perlu ditampilkan, input manual edit harga 1 menjadi harga 2 dan 3 benar sudah ada di PO",
+                        style: TextStyle(fontSize: 11),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text("Varian", style: TextStyle(fontWeight: FontWeight.bold)),
-                        ElevatedButton(onPressed: () {
-                          setSheet(() {
-                            varianCtrls.add(TextEditingController());
-                          });
-                        }, child: const Text("+Tambah Varian", style: TextStyle(fontSize: 11))),
+                        ElevatedButton(
+                          onPressed: () {
+                            setSheet(() {
+                              varianCtrls.add(TextEditingController());
+                            });
+                          },
+                          child: const Text("+Tambah Varian", style: TextStyle(fontSize: 11)),
+                        ),
                       ],
                     ),
-                    ...varianCtrls.asMap().entries.map((e) => Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Row(
-                            children: [
-                              Expanded(child: TextField(controller: e.value, decoration: const InputDecoration(hintText: "Hitam", border: OutlineInputBorder()))),
-                              IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: () {
-                                setSheet(() {
-                                  if (varianCtrls.length > 1) {
-                                    varianCtrls.removeAt(e.key);
-                                  }
-                                });
-                              }),
-                            ],
+                    ...varianCtrls.asMap().entries.map(
+                          (e) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: e.value,
+                                    decoration: const InputDecoration(
+                                      hintText: "Hitam",
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.close, color: Colors.red),
+                                  onPressed: () {
+                                    setSheet(() {
+                                      if (varianCtrls.length > 1) {
+                                        varianCtrls.removeAt(e.key);
+                                      }
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
                           ),
-                        )),
+                        ),
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text("Satuan", style: TextStyle(fontWeight: FontWeight.bold)),
-                        ElevatedButton(onPressed: () {
-                          setSheet(() {
-                            satuanList.add({"satuan": "dus", "dasar": false, "isi": "1"});
-                          });
-                        }, child: const Text("+Tambah Satuan", style: TextStyle(fontSize: 11))),
+                        ElevatedButton(
+                          onPressed: () {
+                            setSheet(() {
+                              satuanList.add({"satuan": "dus", "dasar": false, "isi": "1"});
+                            });
+                          },
+                          child: const Text("+Tambah Satuan", style: TextStyle(fontSize: 11)),
+                        ),
                       ],
                     ),
                     ...satuanList.asMap().entries.map((e) {
                       final s = e.value;
                       final dasar = s["dasar"] == true;
                       final isi = "${s["isi"]}";
-                      final dasarSatuan = satuanList.firstWhere((x) => x["dasar"] == true, orElse: () => {"satuan": "pcs"})["satuan"];
+                      final dasarSatuan = satuanList.firstWhere(
+                        (x) => x["dasar"] == true,
+                        orElse: () => {"satuan": "pcs"},
+                      )["satuan"];
                       return Container(
                         margin: const EdgeInsets.only(bottom: 6),
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         child: Row(
                           children: [
+                            // FIX 1b: DropdownButton juga pakai initialValue
                             DropdownButton<String>(
-                              value: "${s["satuan"]}",
-                              items: ["pcs", "dus", "sak", "batang", "kaleng"].map((x) => DropdownMenuItem(value: x, child: Text(x))).toList(),
+                              initialValue: "${s["satuan"]}",
+                              items: ["pcs", "dus", "sak", "batang", "kaleng"]
+                                  .map((x) => DropdownMenuItem(value: x, child: Text(x)))
+                                  .toList(),
                               onChanged: (v) {
                                 if (v != null) {
                                   setSheet(() {
@@ -432,17 +590,20 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                 }
                               },
                             ),
-                            Radio<bool>(
-                              value: true,
+                            // FIX 2 & 3: Radio groupValue/onChanged -> RadioGroup
+                            RadioGroup<bool>(
                               groupValue: dasar,
-                              onChanged: (_) {
-                                setSheet(() {
-                                  for (var x in satuanList) {
-                                    x["dasar"] = false;
-                                  }
-                                  satuanList[e.key]["dasar"] = true;
-                                });
+                              onChanged: (bool? v) {
+                                if (v == true) {
+                                  setSheet(() {
+                                    for (var x in satuanList) {
+                                      x["dasar"] = false;
+                                    }
+                                    satuanList[e.key]["dasar"] = true;
+                                  });
+                                }
                               },
+                              child: Radio<bool>(value: true),
                             ),
                             const Text("dasar", style: TextStyle(fontSize: 11)),
                             const SizedBox(width: 6),
@@ -451,31 +612,64 @@ class _S extends ConsumerState<HomeDaftarPO> {
                               child: TextField(
                                 controller: TextEditingController(text: isi),
                                 keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+                                decoration: const InputDecoration(
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
                                 onChanged: (v) {
                                   satuanList[e.key]["isi"] = v;
                                 },
                               ),
                             ),
                             const SizedBox(width: 6),
-                            Expanded(child: Text(dasar ? "1 ${s["satuan"]} = 1 $dasarSatuan" : "1 ${s["satuan"]} = $isi $dasarSatuan", style: const TextStyle(fontSize: 11))),
-                            IconButton(icon: const Icon(Icons.close, color: Colors.red, size: 16), onPressed: () {
-                              setSheet(() {
-                                if (satuanList.length > 1) {
-                                  satuanList.removeAt(e.key);
-                                }
-                              });
-                            }),
+                            Expanded(
+                              child: Text(
+                                dasar
+                                    ? "1 ${s["satuan"]} = 1 $dasarSatuan"
+                                    : "1 ${s["satuan"]} = $isi $dasarSatuan",
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, color: Colors.red, size: 16),
+                              onPressed: () {
+                                setSheet(() {
+                                  if (satuanList.length > 1) {
+                                    satuanList.removeAt(e.key);
+                                  }
+                                });
+                              },
+                            ),
                           ],
                         ),
                       );
                     }),
                     const SizedBox(height: 12),
-                    Row(children: [
-                      Expanded(child: TextField(controller: ongkirCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Ongkir / Operasional", border: OutlineInputBorder()))),
-                      const SizedBox(width: 8),
-                      Expanded(child: TextField(controller: diskonCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Diskon", border: OutlineInputBorder()))),
-                    ]),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: ongkirCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: "Ongkir / Operasional",
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: diskonCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: "Diskon",
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
@@ -493,11 +687,19 @@ class _S extends ConsumerState<HomeDaftarPO> {
                               "satuan": unitCtrl.text,
                               "varian": varian,
                             });
-                            barangDipilih = {"kode": kodeCtrl.text, "nama": namaCtrl.text, "kategori": kategoriPilih, "harga1": harga1Ctrl.text.replaceAll(RegExp(r'[^0-9]'), '')};
+                            barangDipilih = {
+                              "kode": kodeCtrl.text,
+                              "nama": namaCtrl.text,
+                              "kategori": kategoriPilih,
+                              "harga1": harga1Ctrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+                            };
                           });
                           Navigator.pop(ctx);
                         },
-                        child: const Text("Simpan Barang", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        child: const Text(
+                          "Simpan Barang",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -518,7 +720,16 @@ class _S extends ConsumerState<HomeDaftarPO> {
         child: SizedBox(
           height: besar ? 58 : 46,
           child: ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: bg ?? Colors.white, foregroundColor: fg ?? Colors.black, padding: EdgeInsets.zero, textStyle: TextStyle(fontSize: besar ? 18 : 15, fontWeight: FontWeight.bold), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: bg ?? Colors.white,
+              foregroundColor: fg ?? Colors.black,
+              padding: EdgeInsets.zero,
+              textStyle: TextStyle(
+                fontSize: besar ? 18 : 15,
+                fontWeight: FontWeight.bold,
+              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            ),
             onPressed: () => pencet(label),
             child: Text(label, textAlign: TextAlign.center),
           ),
@@ -535,22 +746,32 @@ class _S extends ConsumerState<HomeDaftarPO> {
       backgroundColor: const Color(0xFFE8E0C8),
       body: Column(
         children: [
-          // GARIS MERAH - header, layar digeser ke bawah garis ini
           Container(height: 28, color: Colors.black),
           Container(height: 3, color: Colors.red),
-          // LAYAR - GESER KE BAWAH GARIS MERAH
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
             child: Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(10),
+              ),
               child: Column(
                 children: [
-                  const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("2 POWER", style: TextStyle(color: Colors.white70, fontSize: 9)), Text("ELECTRONIC CALCULATOR", style: TextStyle(color: Colors.white70, fontSize: 9))]),
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("2 POWER", style: TextStyle(color: Colors.white70, fontSize: 9)),
+                      Text("ELECTRONIC CALCULATOR", style: TextStyle(color: Colors.white70, fontSize: 9)),
+                    ],
+                  ),
                   const SizedBox(height: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(color: const Color(0xFFDDE8D0), borderRadius: BorderRadius.circular(6)),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDDE8D0),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                     child: Column(
                       children: [
                         Row(
@@ -564,14 +785,19 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text("SARAN:", style: TextStyle(fontSize: 9, color: Colors.black54)),
-                            Text(teksSaran(), style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
+                            Text(teksSaran(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
                           ],
                         ),
                         const SizedBox(height: 2),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(barangDipilih == null ? "Pilih barang via LS" : "${barangDipilih!["nama"]} • ${barangDipilih!["kategori"]}", style: const TextStyle(fontSize: 9, color: Colors.black54)),
+                            Text(
+                              barangDipilih == null
+                                  ? "Pilih barang via LS"
+                                  : "${barangDipilih!["nama"]} • ${barangDipilih!["kategori"]}",
+                              style: const TextStyle(fontSize: 9, color: Colors.black54),
+                            ),
                             Text(teksSaran(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: warnaSaran())),
                           ],
                         ),
@@ -582,9 +808,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
               ),
             ),
           ),
-          // GARIS BIRU - BATAS SCROLL
           Container(height: 3, color: Colors.blue),
-          // AREA SCROLLABLE - di bawah garis biru
           Expanded(
             child: SingleChildScrollView(
               child: Padding(
@@ -597,34 +821,62 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           child: Container(
                             height: 28,
                             padding: const EdgeInsets.symmetric(horizontal: 6),
-                            decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(14)),
-                            child: const Row(children: [Text("  5/4  PEMBULATAN / ORIGINAL", style: TextStyle(color: Colors.white, fontSize: 9))]),
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Row(
+                              children: [
+                                Text("  5/4  PEMBULATAN / ORIGINAL", style: TextStyle(color: Colors.white, fontSize: 9)),
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Container(height: 28, padding: const EdgeInsets.symmetric(horizontal: 6), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.black)), child: const Row(children: [Text("A  0  2  3  F", style: TextStyle(fontSize: 9))])),
+                        Container(
+                          height: 28,
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.black),
+                          ),
+                          child: const Row(children: [Text("A  0  2  3  F", style: TextStyle(fontSize: 9))]),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    // INFO BARANG DIPILIH
                     if (barangDipilih != null)
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Expanded(child: Text("Acuan: ${barangDipilih!["nama"]} • ${formatRupiah(int.tryParse("${barangDipilih!["harga1"]}") ?? 0)}", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-                            TextButton(onPressed: () => setState(() => barangDipilih = null), child: const Text("Hapus Acuan", style: TextStyle(fontSize: 11))),
+                            Expanded(
+                              child: Text(
+                                "Acuan: ${barangDipilih!["nama"]} • ${formatRupiah(int.tryParse("${barangDipilih!["harga1"]}") ?? 0)}",
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => setState(() => barangDipilih = null),
+                              child: const Text("Hapus Acuan", style: TextStyle(fontSize: 11)),
+                            ),
                           ],
                         ),
                       ),
                     const SizedBox(height: 8),
-                    // KEYBOARD - ◀ DIGANTI LS
                     Container(
                       padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(color: const Color(0xFFE8E0C8), borderRadius: BorderRadius.circular(10)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8E0C8),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       child: Column(
                         children: [
                           Row(children: [tombol("AC", bg: Colors.blue.shade300, fg: Colors.white), tombol("MRC", bg: Colors.grey.shade400), tombol("M-", bg: Colors.grey.shade400), tombol("M+", bg: Colors.green, fg: Colors.white, besar: true)]),
@@ -640,33 +892,56 @@ class _S extends ConsumerState<HomeDaftarPO> {
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: const Color(0xFF2E2E2E), borderRadius: BorderRadius.circular(8)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2E2E2E),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text("BARIS PO - MEMORI + TAMBAH PO", style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 4),
-                          if (po.items.isEmpty) const Text("Belum ada item - pencet LS pilih barang, lalu M+", style: TextStyle(color: Colors.white70, fontSize: 11)),
+                          if (po.items.isEmpty)
+                            const Text("Belum ada item - pencet LS pilih barang, lalu M+", style: TextStyle(color: Colors.white70, fontSize: 11)),
                           if (po.items.isNotEmpty)
-                            ...po.items.asMap().entries.map((e) => Container(
-                                  margin: const EdgeInsets.only(bottom: 3),
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(child: Text("${e.key + 1}. ${e.value.namaBarang} - ${e.value.qty}x ${formatRupiah(e.value.hargaSatuan)}", style: const TextStyle(fontSize: 11))),
-                                      IconButton(icon: const Icon(Icons.delete, size: 14), onPressed: () => ref.read(poProvider.notifier).hapusItem(e.key), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
-                                    ],
+                            ...po.items.asMap().entries.map(
+                                  (e) => Container(
+                                    margin: const EdgeInsets.only(bottom: 3),
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(child: Text("${e.key + 1}. ${e.value.namaBarang} - ${e.value.qty}x ${formatRupiah(e.value.hargaSatuan)}", style: const TextStyle(fontSize: 11))),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, size: 14),
+                                          onPressed: () => ref.read(poProvider.notifier).hapusItem(e.key),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                )),
+                                ),
                           const SizedBox(height: 4),
-                          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Subtotal: ${formatRupiah(hasil.subtotal)}", style: const TextStyle(color: Colors.white, fontSize: 11)), Text("Total: ${formatRupiah(hasil.totalAkhir)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))]),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text("Subtotal: ${formatRupiah(hasil.subtotal)}", style: const TextStyle(color: Colors.white, fontSize: 11)),
+                              Text("Total: ${formatRupiah(hasil.totalAkhir)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                            ],
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Row(children: [Expanded(child: FilledButton(onPressed: () {}, child: const Text("Kirim WA"))), const SizedBox(width: 8), Expanded(child: OutlinedButton(onPressed: () {}, child: const Text("Screenshot Nota")))]),
+                    Row(
+                      children: [
+                        Expanded(child: FilledButton(onPressed: () {}, child: const Text("Kirim WA"))),
+                        const SizedBox(width: 8),
+                        Expanded(child: OutlinedButton(onPressed: () {}, child: const Text("Screenshot Nota"))),
+                      ],
+                    ),
                   ],
                 ),
               ),
