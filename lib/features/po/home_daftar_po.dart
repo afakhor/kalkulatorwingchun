@@ -459,14 +459,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                     ),
                   ),
                 ...satuanList.map(
-                  (s) {
-                    final nom = int.tryParse(
-                          s.nominalCtrl.text.replaceAll(
-                            RegExp(r'[^0-9]'),
-                            '',
-                          ),
-                        ) ??
-                        0;
+                  (s) {      
                     final manualTag = s.nominalManual
                         ? " • MANUAL (dikunci)"
                         : " • AUTO";
