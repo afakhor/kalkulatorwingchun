@@ -765,7 +765,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     );
   }
 
-  void bukaFormTambahBarang() {
+    void bukaFormTambahBarang() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: false,
@@ -1067,7 +1067,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                             setSheet(() {
                               satuanList.add(
                                 SatuanItem(
-                                  satuan: "",
+                                  satuan: unitCtrl.text,
                                   dasar: false,
                                   qty: "1",
                                   isi: "1",
@@ -1144,6 +1144,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                     ),
                                     onChanged: (v) {
                                       setSheet(() {
+                                        s.nominalManual = false;
                                         refreshNominal(
                                           s,
                                         );
@@ -1184,6 +1185,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                     onTap: () {
                                       setSheet(() {
                                         s.op = s.op == "x" ? "÷" : "x";
+                                        s.nominalManual = false;
                                         refreshNominal(
                                           s,
                                         );
@@ -1233,6 +1235,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                     ),
                                     onChanged: (v) {
                                       setSheet(() {
+                                        s.nominalManual = false;
                                         refreshNominal(
                                           s,
                                         );
@@ -1311,7 +1314,12 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                         vertical: 10,
                                       ),
                                     ),
-                                    onChanged: (v) {},
+                                    onTap: () {
+                                      s.nominalManual = true;
+                                    },
+                                    onChanged: (v) {
+                                      s.nominalManual = true;
+                                    },
                                   ),
                                 ),
                                 const SizedBox(
