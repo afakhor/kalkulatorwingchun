@@ -356,6 +356,209 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
 
 
+// ============================================================
+// TEMPEL DI SINI:
+// Setelah "void dialogBabe() { ... }"
+// Sebelum "void pencet(String t) {"
+// JANGAN TIMPA void pencet / void refreshNominal yang sudah ada
+// ============================================================
+
+  void refreshSemuaNominal() {
+    for (var s in satuanList) {
+      refreshNominal(
+        s,
+      );
+    }
+  }
+
+  void bukaCek() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(
+            16,
+          ),
+        ),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx2, setSheet) {
+            return Padding(
+              padding: const EdgeInsets.all(
+                16,
+              ),
+              child: SizedBox(
+                height: 420,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "CEK - Proses Kalkulasi",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.close,
+                          ),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                          },
+                        ),
+                      ],
+                    ),
+                    const Text(
+                      "Item | Harga | Kuantiti | Jumlah - bisa edit, bisa hapus sebaris",
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(
+                      height: 8,
+                    ),
+                    if (steps.isEmpty)
+                      const Text(
+                        "Belum ada step. Pencet = atau M+ dulu.",
+                      ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: steps.length,
+                        itemBuilder: (_, i) {
+                          final s = steps[i];
+                          return Container(
+                            margin: const EdgeInsets.only(
+                              bottom: 4,
+                            ),
+                            padding: const EdgeInsets.all(
+                              6,
+                            ),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: Colors.grey.shade300,
+                              ),
+                              borderRadius: BorderRadius.circular(
+                                6,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: TextEditingController(
+                                      text: "${s["item"]}",
+                                    ),
+                                    decoration: const InputDecoration(
+                                      labelText: "Item",
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    onChanged: (v) {
+                                      s["item"] = v;
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(
+                                  width: 4,
+                                ),
+                                SizedBox(
+                                  width: 70,
+                                  child: TextField(
+                                    controller: TextEditingController(
+                                      text: "${s["harga"]}",
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      labelText: "Harga",
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    onChanged: (v) {
+                                      setSheet(() {
+                                        s["harga"] = double.tryParse(v) ?? 0;
+                                        s["jumlah"] =
+                                            (s["harga"] as double) *
+                                                (s["qty"] as num);
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(
+                                  width: 4,
+                                ),
+                                SizedBox(
+                                  width: 50,
+                                  child: TextField(
+                                    controller: TextEditingController(
+                                      text: "${s["qty"]}",
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      labelText: "Qty",
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    onChanged: (v) {
+                                      setSheet(() {
+                                        s["qty"] = double.tryParse(v) ?? 0;
+                                        s["jumlah"] =
+                                            (s["harga"] as double) *
+                                                (s["qty"] as num);
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(
+                                  width: 4,
+                                ),
+                                SizedBox(
+                                  width: 70,
+                                  child: Text(
+                                    formatRupiah(
+                                      (s["jumlah"] as num).toInt(),
+                                    ),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete,
+                                    color: Colors.red,
+                                    size: 16,
+                                  ),
+                                  onPressed: () {
+                                    setSheet(() {
+                                      steps.removeAt(i);
+                                    });
+                                    setState(() {});
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
 
   void pencet(
     String t,
