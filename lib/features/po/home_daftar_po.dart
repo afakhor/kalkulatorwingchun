@@ -5,6 +5,64 @@ import '../../core/formatter.dart';
 import 'po_provider.dart';
 import 'parse_cepat.dart';
 
+// SATUAN
+// Controller disimpan permanen
+// Jangan dibuat di build
+// Kalau dibuat di build
+// Tiap ketik controller ke-reset
+// Angka 1 dan 50 jadi tidak bisa diedit
+class SatuanItem {
+  SatuanItem({
+    required String satuan,
+    required bool dasar,
+    required String qty,
+    required String isi,
+    required String op,
+    required String nominal,
+  })  : namaCtrl = TextEditingController(
+          text: satuan,
+        ),
+        qtyCtrl = TextEditingController(
+          text: qty,
+        ),
+        isiCtrl = TextEditingController(
+          text: isi,
+        ),
+        nominalCtrl = TextEditingController(
+          text: nominal,
+        ),
+        dasar = dasar,
+        op = op;
+
+  TextEditingController namaCtrl;
+  TextEditingController qtyCtrl;
+  TextEditingController isiCtrl;
+  TextEditingController nominalCtrl;
+  bool dasar;
+  String op;
+
+  Map<String, dynamic> toMap() {
+    return {
+      "satuan": namaCtrl.text,
+      "dasar": dasar,
+      "qty": qtyCtrl.text,
+      "isi": isiCtrl.text,
+      "op": op,
+      "nominal": nominalCtrl.text.replaceAll(
+        RegExp(r'[^0-9]'),
+        '',
+      ),
+    };
+  }
+
+  void dispose() {
+    namaCtrl.dispose();
+    qtyCtrl.dispose();
+    isiCtrl.dispose();
+    nominalCtrl.dispose();
+  }
+}
+
 class HomeDaftarPO extends ConsumerStatefulWidget {
   const HomeDaftarPO({
     super.key,
@@ -16,17 +74,24 @@ class HomeDaftarPO extends ConsumerStatefulWidget {
 
 class _S extends ConsumerState<HomeDaftarPO> {
   String layar = "0";
-  String layarKetik = "";
   String op = "";
   double angka1 = 0;
+  double memori = 0;
+  bool tekanTombol = false;
+  String tombolDitekan = "";
 
   Map<String, String>? barangDipilih;
+
   final List<Map<String, dynamic>> daftarBarang = [];
+
   String queryLS = "";
 
   final kodeCtrl = TextEditingController();
+
   final namaCtrl = TextEditingController();
+
   String kategoriPilih = "Semen";
+
   final List<String> listKategori = [
     "Semen",
     "Besi",
@@ -34,10 +99,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
     "Keramik",
     "Pipa",
   ];
+
   final kategoriBaruCtrl = TextEditingController();
+
   final unitCtrl = TextEditingController(
     text: "pcs",
   );
+
   final harga1Ctrl = TextEditingController(
     text: "0",
   );
@@ -48,35 +116,28 @@ class _S extends ConsumerState<HomeDaftarPO> {
     ),
   ];
 
-  List<Map<String, dynamic>> satuanList = [
-    {
-      "satuan": "kg",
-      "dasar": true,
-      "isi": "1",
-      "op": "x",
-      "nominal": "50000",
-    },
-    {
-      "satuan": "sak",
-      "dasar": false,
-      "isi": "50",
-      "op": "x",
-      "nominal": "2500000",
-    },
+  List<SatuanItem> satuanList = [
+    SatuanItem(
+      satuan: "kg",
+      dasar: true,
+      qty: "1",
+      isi: "1",
+      op: "x",
+      nominal: "50000",
+    ),
+    SatuanItem(
+      satuan: "sak",
+      dasar: false,
+      qty: "1",
+      isi: "50",
+      op: "x",
+      nominal: "2500000",
+    ),
   ];
 
   String modeHitung = "PEMBULATAN";
-  int desimal = 0;
 
-  String get labelDesimal {
-    if (desimal == 0) {
-      return "0";
-    }
-    if (desimal == 2) {
-      return "2";
-    }
-    return "3";
-  }
+  int desimal = 0;
 
   final List<Map<String, dynamic>> steps = [];
 
@@ -91,7 +152,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
 
   double get manual {
-    return double.tryParse(layar) ?? 0;
+    return double.tryParse(
+          layar,
+        ) ??
+        0;
   }
 
   double get persen {
@@ -149,7 +213,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
     return "${persen.toStringAsFixed(1)}%";
   }
 
-  String formatHasil(double v) {
+  String formatHasil(
+    double v,
+  ) {
     if (modeHitung == "ORIGINAL") {
       return v.toStringAsFixed(
         desimal,
@@ -163,9 +229,20 @@ class _S extends ConsumerState<HomeDaftarPO> {
     );
   }
 
-  double hitungNominal(Map<String, dynamic> s) {
+  // Nominal
+  // qty x isi x harga acuan
+  // 1 sak x 50 kg x Rp 50.000
+  // =
+  // Rp 2.500.000
+  double hitungNominal(
+    SatuanItem s,
+  ) {
+    final qty = double.tryParse(
+          s.qtyCtrl.text,
+        ) ??
+        1;
     final isi = double.tryParse(
-          "${s["isi"]}",
+          s.isiCtrl.text,
         ) ??
         1;
     final hargaForm = double.tryParse(
@@ -176,28 +253,64 @@ class _S extends ConsumerState<HomeDaftarPO> {
         ) ??
         0;
     final harga = hargaForm > 0 ? hargaForm : hargaAcuan;
-    if (s["op"] == "÷") {
+    if (s.op == "÷") {
       if (isi == 0) {
         return 0;
       }
-      return harga / isi;
+      return qty * (harga / isi);
     }
-    return isi * harga;
+    return qty * isi * harga;
   }
 
-  void refreshNominal(int index) {
+  void refreshNominal(
+    SatuanItem s,
+  ) {
     final hasil = hitungNominal(
-      satuanList[index],
+      s,
     );
-    satuanList[index]["nominal"] = hasil.toStringAsFixed(0);
+    s.nominalCtrl.text = hasil.toStringAsFixed(0);
+  }
+
+  void refreshSemuaNominal() {
+    for (var s in satuanList) {
+      refreshNominal(
+        s,
+      );
+    }
   }
 
   void syncUnitDariDasar() {
     final dasar = satuanList.firstWhere(
-      (x) => x["dasar"] == true,
-      orElse: () => {"satuan": "pcs"},
+      (x) => x.dasar == true,
+      orElse: () => satuanList.first,
     );
-    unitCtrl.text = "${dasar["satuan"]}";
+    unitCtrl.text = dasar.namaCtrl.text;
+  }
+
+  String teksRumusSatuan(
+    SatuanItem s,
+  ) {
+    final dasarNama = satuanList
+        .firstWhere(
+          (x) => x.dasar == true,
+          orElse: () => satuanList.first,
+        )
+        .namaCtrl
+        .text;
+    final qty = s.qtyCtrl.text.isEmpty ? "1" : s.qtyCtrl.text;
+    final isi = s.isiCtrl.text.isEmpty ? "1" : s.isiCtrl.text;
+    final nom = s.nominalCtrl.text.isEmpty ? "0" : s.nominalCtrl.text;
+    final nomBersih = int.tryParse(
+          nom.replaceAll(
+            RegExp(r'[^0-9]'),
+            '',
+          ),
+        ) ??
+        0;
+    if (s.dasar) {
+      return "$qty ${s.namaCtrl.text} = ${formatRupiah(nomBersih)}";
+    }
+    return "$qty ${s.namaCtrl.text} ${s.op} $isi $dasarNama = ${formatRupiah(nomBersih)}";
   }
 
   void dialogBabe() {
@@ -210,14 +323,12 @@ class _S extends ConsumerState<HomeDaftarPO> {
           ),
           content: const Text(
             "Harga Acuan 100% dari Harga 1.\n\n"
-            "Kali (x): isi x harga acuan\n"
-            "Bagi (÷): harga acuan ÷ isi\n\n"
-            "Contoh semen:\n"
-            "1 sak = 50 kg\n"
-            "Harga 1 = Rp 50.000 per kg\n"
-            "1 sak x Rp 50.000 = Rp 2.500.000\n\n"
+            "1 sak x 50 kg artinya:\n"
+            "qty 1 x isi 50 x harga acuan\n"
+            "1 x 50 x Rp 50.000 = Rp 2.500.000\n\n"
+            "Tap (x) untuk ganti jadi (÷).\n"
             "BEP = Acuan x 110%.\n"
-            "CEK = lihat step, bisa edit & hapus sebaris.",
+            "CEK = lihat step, edit & hapus sebaris.",
           ),
           actions: [
             TextButton(
@@ -249,11 +360,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
         return StatefulBuilder(
           builder: (ctx2, setSheet) {
             return Padding(
-              padding: const EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 16,
-                bottom: 16,
+              padding: const EdgeInsets.all(
+                16,
               ),
               child: SizedBox(
                 height: 420,
@@ -348,8 +456,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                     ),
                                     onChanged: (v) {
                                       setSheet(() {
-                                        s["harga"] =
-                                            double.tryParse(v) ?? 0;
+                                        s["harga"] = double.tryParse(v) ?? 0;
                                         s["jumlah"] =
                                             (s["harga"] as double) *
                                                 (s["qty"] as num);
@@ -426,18 +533,84 @@ class _S extends ConsumerState<HomeDaftarPO> {
     );
   }
 
-  void pencet(String t) {
+  void pencet(
+    String t,
+  ) {
     HapticFeedback.lightImpact();
     setState(() {
       if (t == "AC" || t == "ON/C") {
         layar = "0";
         op = "";
         angka1 = 0;
-        layarKetik = "";
       } else if (t == "LS") {
         bukaListLS();
+      } else if (t == "CEK") {
+        bukaCek();
       } else if (t == "OFF") {
         layar = "0";
+      } else if (t == "BEP") {
+        if (hargaAcuan > 0) {
+          layar = formatHasil(
+            hargaAcuan * 1.1,
+          );
+        } else {
+          layar = formatHasil(
+            (double.tryParse(layar) ?? 0) + 120,
+          );
+        }
+      } else if (t == "M+") {
+        memori += double.tryParse(layar) ?? 0;
+        if (barangDipilih != null) {
+          final qty = int.tryParse(layar) ?? 1;
+          final harga = int.tryParse(
+                "${barangDipilih!["harga1"]}",
+              ) ??
+              0;
+          final it = parseInputCepat(
+            "$qty x ${barangDipilih!["nama"]} $harga",
+          );
+          if (it != null) {
+            ref.read(poProvider.notifier).tambahItem(it);
+          }
+          steps.add(
+            {
+              "item": barangDipilih!["nama"],
+              "harga": harga,
+              "qty": qty,
+              "jumlah": qty * harga,
+            },
+          );
+        }
+        layar = "0";
+      } else if (t == "M-") {
+        memori -= double.tryParse(layar) ?? 0;
+        layar = "0";
+      } else if (t == "MRC") {
+        layar = formatHasil(
+          memori,
+        );
+        memori = 0;
+      } else if (t == "MR") {
+        layar = formatHasil(
+          memori,
+        );
+      } else if (t == "MC") {
+        memori = 0;
+        layar = "0";
+      } else if (t == "MU") {
+        final v = double.tryParse(layar) ?? 0;
+        layar = formatHasil(
+          v * 1.1,
+        );
+      } else if (t == "▶" || t == "⌫") {
+        if (layar.length > 1) {
+          layar = layar.substring(
+            0,
+            layar.length - 1,
+          );
+        } else {
+          layar = "0";
+        }
       } else if (["+", "-", "x", "÷", "/"].contains(t)) {
         angka1 = double.tryParse(layar) ?? 0;
         op = t;
@@ -471,60 +644,21 @@ class _S extends ConsumerState<HomeDaftarPO> {
           },
         );
         op = "";
-      } else if (t == "M+") {
-        if (barangDipilih != null) {
-          final qty = int.tryParse(layar) ?? 1;
-          final harga = int.tryParse(
-                "${barangDipilih!["harga1"]}",
-              ) ??
-              0;
-          final it = parseInputCepat(
-            "$qty x ${barangDipilih!["nama"]} $harga",
-          );
-          if (it != null) {
-            ref.read(poProvider.notifier).tambahItem(it);
-          }
-          steps.add(
-            {
-              "item": barangDipilih!["nama"],
-              "harga": harga,
-              "qty": qty,
-              "jumlah": qty * harga,
-            },
-          );
-        }
-        layar = "0";
-      } else if (t == "BEP") {
-        if (hargaAcuan > 0) {
-          layar = formatHasil(
-            hargaAcuan * 1.1,
-          );
-        } else {
-          layar = formatHasil(
-            (double.tryParse(layar) ?? 0) + 120,
-          );
-        }
-      } else if (t == "CEK") {
-        bukaCek();
       } else if (t == "+/-") {
         if (layar.startsWith("-")) {
           layar = layar.substring(1);
-        } else {
-          if (layar != "0") {
-            layar = "-$layar";
-          }
+        } else if (layar != "0") {
+          layar = "-$layar";
         }
       } else if (t == "%") {
-        final v = (double.tryParse(layar) ?? 0) / 100;
-        layar = formatHasil(v);
+        layar = formatHasil(
+          (double.tryParse(layar) ?? 0) / 100,
+        );
       } else {
         if (layar == "0") {
           layar = t;
         } else {
           layar += t;
-        }
-        if (t.length <= 2) {
-          layarKetik += t;
         }
       }
     });
@@ -536,7 +670,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
       isScrollControlled: false,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
-          top: Radius.circular(16),
+          top: Radius.circular(
+            16,
+          ),
         ),
       ),
       builder: (ctx) {
@@ -544,15 +680,12 @@ class _S extends ConsumerState<HomeDaftarPO> {
           builder: (ctx2, setSheet) {
             final q = queryLS.toLowerCase();
             final filtered = daftarBarang.where((b) {
-              final nama = "${b["nama"]}".toLowerCase();
-              final kode = "${b["kode"]}".toLowerCase();
-              final kat = "${b["kategori"]}".toLowerCase();
               if (q.isEmpty) {
                 return true;
               }
-              return nama.contains(q) ||
-                  kode.contains(q) ||
-                  kat.contains(q);
+              return "${b["nama"]}".toLowerCase().contains(q) ||
+                  "${b["kode"]}".toLowerCase().contains(q) ||
+                  "${b["kategori"]}".toLowerCase().contains(q);
             }).toList();
             final suggestions = filtered.take(5).toList();
             return Padding(
@@ -589,8 +722,12 @@ class _S extends ConsumerState<HomeDaftarPO> {
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.close),
-                              onPressed: () => Navigator.pop(ctx),
+                              icon: const Icon(
+                                Icons.close,
+                              ),
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                              },
                             ),
                           ],
                         ),
@@ -598,7 +735,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
                     ),
                     TextField(
                       decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search),
+                        prefixIcon: Icon(
+                          Icons.search,
+                        ),
                         hintText: "Cari kode / nama / kategori...",
                         border: OutlineInputBorder(),
                       ),
@@ -675,8 +814,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                 final satuanBarang =
                                     (b["satuanList"] as List?) ?? [];
                                 return Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     ListTile(
                                       leading: CircleAvatar(
@@ -743,9 +881,11 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                                       "${m["nominal"]}",
                                                     ) ??
                                                     0;
+                                                final qty = "${m["qty"] ?? "1"}";
+                                                final isi = "${m["isi"] ?? "1"}";
                                                 final label = m["dasar"] == true
-                                                    ? "1 ${m["satuan"]}"
-                                                    : "1 ${m["satuan"]} = ${m["isi"]} $dasarSatuan";
+                                                    ? "$qty ${m["satuan"]}"
+                                                    : "$qty ${m["satuan"]} = $qty x $isi $dasarSatuan";
                                                 return ActionChip(
                                                   label: Text(
                                                     "$label - ${formatRupiah(nom.toInt())}",
@@ -757,16 +897,14 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                                     setState(() {
                                                       barangDipilih = {
                                                         "kode": "${b["kode"]}",
-                                                        "nama":
-                                                            "${b["nama"]}",
+                                                        "nama": "${b["nama"]}",
                                                         "kategori":
                                                             "${b["kategori"]}",
                                                         "harga1":
                                                             "${nom.toInt()}",
                                                         "satuan":
                                                             "${m["satuan"]}",
-                                                        "satuanIsi":
-                                                            "${m["isi"]}",
+                                                        "satuanIsi": "$isi",
                                                         "satuanOp":
                                                             "${m["op"]}",
                                                       };
@@ -801,7 +939,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
       isScrollControlled: false,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
-          top: Radius.circular(16),
+          top: Radius.circular(
+            16,
+          ),
         ),
       ),
       builder: (ctx) {
@@ -829,8 +969,12 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(ctx),
+                          icon: const Icon(
+                            Icons.close,
+                          ),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                          },
                         ),
                       ],
                     ),
@@ -915,15 +1059,16 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                     ),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.add),
+                                    icon: const Icon(
+                                      Icons.add,
+                                    ),
                                     onPressed: () {
                                       if (kategoriBaruCtrl.text.isNotEmpty) {
                                         setSheet(() {
                                           listKategori.add(
                                             kategoriBaruCtrl.text,
                                           );
-                                          kategoriPilih =
-                                              kategoriBaruCtrl.text;
+                                          kategoriPilih = kategoriBaruCtrl.text;
                                           kategoriBaruCtrl.clear();
                                         });
                                       }
@@ -985,9 +1130,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                       ),
                       onChanged: (v) {
                         setSheet(() {
-                          for (var i = 0; i < satuanList.length; i++) {
-                            refreshNominal(i);
-                          }
+                          refreshSemuaNominal();
                         });
                       },
                     ),
@@ -995,12 +1138,16 @@ class _S extends ConsumerState<HomeDaftarPO> {
                       height: 6,
                     ),
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(
+                        8,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(
                           0xFFFFF8C5,
                         ),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(
+                          8,
+                        ),
                       ),
                       child: const Text(
                         "Harga 1 ini yang jadi acuan prosentase 100% sedang harga 2 dan 3 tidak perlu ditampilkan, input manual edit harga 1 menjadi harga 2 dan 3 benar sudah ada di PO",
@@ -1087,16 +1234,17 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           onPressed: () {
                             setSheet(() {
                               satuanList.add(
-                                {
-                                  "satuan": "",
-                                  "dasar": false,
-                                  "isi": "1",
-                                  "op": "x",
-                                  "nominal": harga1Ctrl.text.replaceAll(
+                                SatuanItem(
+                                  satuan: "",
+                                  dasar: false,
+                                  qty: "1",
+                                  isi: "1",
+                                  op: "x",
+                                  nominal: harga1Ctrl.text.replaceAll(
                                     RegExp(r'[^0-9]'),
                                     '',
                                   ),
-                                },
+                                ),
                               );
                             });
                           },
@@ -1109,177 +1257,247 @@ class _S extends ConsumerState<HomeDaftarPO> {
                         ),
                       ],
                     ),
+                    const Text(
+                      "Baris 1: qty + satuan + x/÷ + isi. Baris 2: Rp nominal + rumus. 1 dan 50 bisa edit.",
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(
+                      height: 6,
+                    ),
                     ...satuanList.asMap().entries.map((e) {
                       final s = e.value;
-                      final dasar = s["dasar"] == true;
-                      final isi = "${s["isi"]}";
-                      final nominal = "${s["nominal"]}";
+                      final dasarNama = satuanList
+                          .firstWhere(
+                            (x) => x.dasar == true,
+                            orElse: () => satuanList.first,
+                          )
+                          .namaCtrl
+                          .text;
                       return Container(
                         margin: const EdgeInsets.only(
-                          bottom: 4,
+                          bottom: 8,
                         ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 4,
+                        padding: const EdgeInsets.all(
+                          8,
                         ),
                         decoration: BoxDecoration(
                           border: Border.all(
                             color: Colors.grey.shade300,
                           ),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(
+                            10,
+                          ),
+                          color: Colors.white,
                         ),
-                        child: Row(
+                        child: Column(
                           children: [
-                            SizedBox(
-                              width: 62,
-                              child: TextField(
-                                controller: TextEditingController(
-                                  text: "${s["satuan"]}",
-                                ),
-                                decoration: const InputDecoration(
-                                  hintText: "kg",
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 8,
-                                  ),
-                                ),
-                                onChanged: (v) {
-                                  satuanList[e.key]["satuan"] = v;
-                                  if (satuanList[e.key]["dasar"] == true) {
-                                    syncUnitDariDasar();
-                                  }
-                                },
-                              ),
-                            ),
-                            RadioGroup<bool>(
-                              groupValue: dasar,
-                              onChanged: (bool? v) {
-                                if (v == true) {
-                                  setSheet(() {
-                                    for (var x in satuanList) {
-                                      x["dasar"] = false;
-                                    }
-                                    satuanList[e.key]["dasar"] = true;
-                                    syncUnitDariDasar();
-                                  });
-                                }
-                              },
-                              child: Radio<bool>(
-                                value: true,
-                              ),
-                            ),
-                            const Text(
-                              "dasar",
-                              style: TextStyle(
-                                fontSize: 10,
-                              ),
-                            ),
-                            const SizedBox(
-                              width: 4,
-                            ),
-                            SizedBox(
-                              width: 36,
-                              height: 36,
-                              child: InkWell(
-                                onTap: () {
-                                  setSheet(() {
-                                    satuanList[e.key]["op"] =
-                                        s["op"] == "x" ? "÷" : "x";
-                                    refreshNominal(e.key);
-                                  });
-                                },
-                                borderRadius: BorderRadius.circular(18),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: s["op"] == "÷"
-                                        ? Colors.teal.shade100
-                                        : Colors.orange.shade100,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.grey.shade400,
+                            Row(
+                              children: [
+                                SizedBox(
+                                  width: 52,
+                                  child: TextField(
+                                    controller: s.qtyCtrl,
+                                    keyboardType: TextInputType.number,
+                                    textAlign: TextAlign.center,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 10,
+                                      ),
                                     ),
+                                    onChanged: (v) {
+                                      setSheet(() {
+                                        refreshNominal(
+                                          s,
+                                        );
+                                      });
+                                    },
                                   ),
-                                  child: Center(
-                                    child: Text(
-                                      "${s["op"]}",
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
+                                ),
+                                const SizedBox(
+                                  width: 6,
+                                ),
+                                SizedBox(
+                                  width: 62,
+                                  child: TextField(
+                                    controller: s.namaCtrl,
+                                    decoration: const InputDecoration(
+                                      hintText: "sak",
+                                      border: OutlineInputBorder(),
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 10,
+                                      ),
+                                    ),
+                                    onChanged: (v) {
+                                      if (s.dasar) {
+                                        syncUnitDariDasar();
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(
+                                  width: 6,
+                                ),
+                                SizedBox(
+                                  width: 38,
+                                  height: 38,
+                                  child: InkWell(
+                                    onTap: () {
+                                      setSheet(() {
+                                        s.op = s.op == "x" ? "÷" : "x";
+                                        refreshNominal(
+                                          s,
+                                        );
+                                      });
+                                    },
+                                    borderRadius: BorderRadius.circular(
+                                      19,
+                                    ),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: s.op == "÷"
+                                            ? Colors.teal.shade100
+                                            : Colors.orange.shade100,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.grey.shade400,
+                                        ),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          s.op,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(
-                              width: 4,
-                            ),
-                            SizedBox(
-                              width: 48,
-                              child: TextField(
-                                controller: TextEditingController(
-                                  text: isi,
+                                const SizedBox(
+                                  width: 6,
                                 ),
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 8,
+                                SizedBox(
+                                  width: 56,
+                                  child: TextField(
+                                    controller: s.isiCtrl,
+                                    keyboardType: TextInputType.number,
+                                    textAlign: TextAlign.center,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 10,
+                                      ),
+                                    ),
+                                    onChanged: (v) {
+                                      setSheet(() {
+                                        refreshNominal(
+                                          s,
+                                        );
+                                      });
+                                    },
                                   ),
                                 ),
-                                onChanged: (v) {
-                                  satuanList[e.key]["isi"] = v;
-                                  setSheet(() {
-                                    refreshNominal(e.key);
-                                  });
-                                },
-                              ),
-                            ),
-                            const SizedBox(
-                              width: 4,
-                            ),
-                            Expanded(
-                              child: TextField(
-                                controller: TextEditingController(
-                                  text: nominal,
+                                const SizedBox(
+                                  width: 6,
                                 ),
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  prefixText: "Rp ",
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 8,
+                                Expanded(
+                                  child: Text(
+                                    dasarNama,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
-                                onChanged: (v) {
-                                  satuanList[e.key]["nominal"] = v.replaceAll(
-                                    RegExp(r'[^0-9]'),
-                                    '',
-                                  );
-                                },
-                              ),
+                                RadioGroup<bool>(
+                                  groupValue: s.dasar,
+                                  onChanged: (bool? v) {
+                                    if (v == true) {
+                                      setSheet(() {
+                                        for (var x in satuanList) {
+                                          x.dasar = false;
+                                        }
+                                        s.dasar = true;
+                                        syncUnitDariDasar();
+                                      });
+                                    }
+                                  },
+                                  child: Radio<bool>(
+                                    value: true,
+                                  ),
+                                ),
+                                const Text(
+                                  "dasar",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.close,
+                                    color: Colors.red,
+                                    size: 16,
+                                  ),
+                                  onPressed: () {
+                                    setSheet(() {
+                                      if (satuanList.length > 1) {
+                                        satuanList.removeAt(e.key);
+                                      }
+                                    });
+                                  },
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                ),
+                              ],
                             ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.close,
-                                color: Colors.red,
-                                size: 16,
-                              ),
-                              onPressed: () {
-                                setSheet(() {
-                                  if (satuanList.length > 1) {
-                                    satuanList.removeAt(e.key);
-                                  }
-                                });
-                              },
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
+                            const SizedBox(
+                              height: 6,
+                            ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: s.nominalCtrl,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      prefixText: "Rp ",
+                                      border: OutlineInputBorder(),
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 10,
+                                      ),
+                                    ),
+                                    onChanged: (v) {},
+                                  ),
+                                ),
+                                const SizedBox(
+                                  width: 8,
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    teksRumusSatuan(
+                                      s,
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.teal,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -1297,7 +1515,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
                         ),
                         onPressed: () {
                           final varian = varianCtrls
-                              .map((c) => c.text)
+                              .map(
+                                (c) => c.text,
+                              )
                               .join(", ");
                           setState(() {
                             daftarBarang.add(
@@ -1311,11 +1531,11 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                 ),
                                 "satuan": unitCtrl.text,
                                 "varian": varian,
-                                "satuanList": List<Map<String, dynamic>>.from(
-                                  satuanList.map(
-                                    (x) => Map<String, dynamic>.from(x),
-                                  ),
-                                ),
+                                "satuanList": satuanList
+                                    .map(
+                                      (x) => x.toMap(),
+                                    )
+                                    .toList(),
                               },
                             );
                             barangDipilih = {
@@ -1352,34 +1572,94 @@ class _S extends ConsumerState<HomeDaftarPO> {
     );
   }
 
+  // TOMBOL TIMBUL + EFEK TEKAN
+  // Bayangan bawah 3px = timbul
+  // Pas ditekan turun 2px
+  // Bayangan hilang = ketekan beneran
   Widget tombol(
     String label, {
     Color? bg,
     Color? fg,
     bool besar = false,
   }) {
+    final isDown = tombolDitekan == label && tekanTombol;
+    final baseColor = bg ?? Colors.white;
+    final shadowColor =
+        baseColor == Colors.white ? Colors.grey.shade400 : Colors.black26;
     return Expanded(
       child: Padding(
-        padding: const EdgeInsets.all(2.5),
-        child: SizedBox(
-          height: besar ? 58 : 46,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: bg ?? Colors.white,
-              foregroundColor: fg ?? Colors.black,
-              padding: EdgeInsets.zero,
-              textStyle: TextStyle(
-                fontSize: besar ? 18 : 15,
-                fontWeight: FontWeight.bold,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-            onPressed: () => pencet(label),
-            child: Text(
+        padding: const EdgeInsets.all(
+          2.5,
+        ),
+        child: GestureDetector(
+          onTapDown: (_) {
+            setState(() {
+              tombolDitekan = label;
+              tekanTombol = true;
+            });
+          },
+          onTapUp: (_) {
+            setState(() {
+              tekanTombol = false;
+            });
+            pencet(
               label,
-              textAlign: TextAlign.center,
+            );
+          },
+          onTapCancel: () {
+            setState(() {
+              tekanTombol = false;
+            });
+          },
+          child: AnimatedContainer(
+            duration: const Duration(
+              milliseconds: 80,
+            ),
+            height: besar ? 56 : 46,
+            transform: Matrix4.translationValues(
+              0,
+              isDown ? 2 : 0,
+              0,
+            ),
+            decoration: BoxDecoration(
+              color: isDown ? baseColor.withOpacity(0.85) : baseColor,
+              borderRadius: BorderRadius.circular(
+                8,
+              ),
+              border: Border.all(
+                color: Colors.black12,
+              ),
+              boxShadow: isDown
+                  ? []
+                  : [
+                      BoxShadow(
+                        color: shadowColor,
+                        offset: const Offset(
+                          0,
+                          3,
+                        ),
+                        blurRadius: 0,
+                      ),
+                      BoxShadow(
+                        color: Colors.white.withOpacity(0.6),
+                        offset: const Offset(
+                          0,
+                          -1,
+                        ),
+                        blurRadius: 0,
+                      ),
+                    ],
+            ),
+            child: Center(
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: besar ? 16 : 14,
+                  fontWeight: FontWeight.bold,
+                  color: fg ?? Colors.black,
+                ),
+              ),
             ),
           ),
         ),
@@ -1388,8 +1668,12 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final po = ref.watch(poProvider);
+  Widget build(
+    BuildContext context,
+  ) {
+    final po = ref.watch(
+      poProvider,
+    );
     final hasil = ref.read(poProvider.notifier).hitungTotal();
     return Scaffold(
       backgroundColor: const Color(
@@ -1427,18 +1711,21 @@ class _S extends ConsumerState<HomeDaftarPO> {
                         6,
                       ),
                       child: Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(
+                          10,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(
                             0xFF1A1A1A,
                           ),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(
+                            10,
+                          ),
                         ),
                         child: Column(
                           children: [
                             Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text(
                                   "BASKORO WINGCHUN",
@@ -1473,7 +1760,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                 color: const Color(
                                   0xFFDDE8D0,
                                 ),
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(
+                                  6,
+                                ),
                               ),
                               child: Column(
                                 children: [
@@ -1557,7 +1846,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                 ),
                                 decoration: BoxDecoration(
                                   color: Colors.black,
-                                  borderRadius: BorderRadius.circular(16),
+                                  borderRadius: BorderRadius.circular(
+                                    16,
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
@@ -1568,7 +1859,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                       ),
                                       decoration: BoxDecoration(
                                         color: Colors.white,
-                                        borderRadius: BorderRadius.circular(10),
+                                        borderRadius: BorderRadius.circular(
+                                          10,
+                                        ),
                                       ),
                                       child: const Text(
                                         "5/4",
@@ -1695,19 +1988,25 @@ class _S extends ConsumerState<HomeDaftarPO> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(
+                8,
+              ),
               child: Column(
                 children: [
                   const SizedBox(
                     height: 8,
                   ),
                   Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(
+                      6,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(
                         0xFFE8E0C8,
                       ),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(
+                        10,
+                      ),
                     ),
                     child: Column(
                       children: [
@@ -1715,7 +2014,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           children: [
                             tombol(
                               "AC",
-                              bg: Colors.blue.shade300,
+                              bg: Colors.blue.shade400,
                               fg: Colors.white,
                             ),
                             tombol(
@@ -1732,23 +2031,50 @@ class _S extends ConsumerState<HomeDaftarPO> {
                               fg: Colors.white,
                               besar: true,
                             ),
+                            tombol(
+                              "LS",
+                              bg: Colors.orange.shade100,
+                              besar: true,
+                            ),
+                            tombol(
+                              "CEK",
+                              bg: Colors.black,
+                              fg: Colors.white,
+                            ),
+                            tombol(
+                              "BEP",
+                              bg: Colors.pink,
+                              fg: Colors.white,
+                            ),
                           ],
                         ),
                         Row(
                           children: [
                             tombol(
                               "OFF",
-                              bg: Colors.blue.shade300,
+                              bg: Colors.blue.shade400,
                               fg: Colors.white,
                             ),
-                            tombol("7"),
-                            tombol("8"),
-                            tombol("9"),
                             tombol(
-                              "LS",
-                              bg: Colors.orange.shade100,
-                              fg: Colors.black,
-                              besar: true,
+                              "7",
+                            ),
+                            tombol(
+                              "8",
+                            ),
+                            tombol(
+                              "9",
+                            ),
+                            tombol(
+                              "▶",
+                              bg: Colors.grey.shade300,
+                            ),
+                            tombol(
+                              "MU",
+                              bg: Colors.grey.shade300,
+                            ),
+                            tombol(
+                              "MC",
+                              bg: Colors.grey.shade300,
                             ),
                           ],
                         ),
@@ -1758,11 +2084,25 @@ class _S extends ConsumerState<HomeDaftarPO> {
                               "%",
                               bg: Colors.grey.shade300,
                             ),
-                            tombol("4"),
-                            tombol("5"),
-                            tombol("6"),
+                            tombol(
+                              "4",
+                            ),
+                            tombol(
+                              "5",
+                            ),
+                            tombol(
+                              "6",
+                            ),
                             tombol(
                               "-",
+                              bg: Colors.grey.shade300,
+                            ),
+                            tombol(
+                              "÷",
+                              bg: Colors.grey.shade300,
+                            ),
+                            tombol(
+                              "MR",
                               bg: Colors.grey.shade300,
                             ),
                           ],
@@ -1773,11 +2113,25 @@ class _S extends ConsumerState<HomeDaftarPO> {
                               "+/-",
                               bg: Colors.grey.shade300,
                             ),
-                            tombol("1"),
-                            tombol("2"),
-                            tombol("3"),
+                            tombol(
+                              "1",
+                            ),
+                            tombol(
+                              "2",
+                            ),
+                            tombol(
+                              "3",
+                            ),
                             tombol(
                               "+",
+                              bg: Colors.grey.shade300,
+                            ),
+                            tombol(
+                              "x",
+                              bg: Colors.grey.shade300,
+                            ),
+                            tombol(
+                              "M-",
                               bg: Colors.grey.shade300,
                             ),
                           ],
@@ -1786,38 +2140,31 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           children: [
                             tombol(
                               "ON/C",
-                              bg: Colors.blue.shade300,
+                              bg: Colors.blue.shade400,
                               fg: Colors.white,
                             ),
-                            tombol("0"),
-                            tombol("00"),
-                            tombol("."),
+                            tombol(
+                              "0",
+                            ),
+                            tombol(
+                              "00",
+                            ),
+                            tombol(
+                              ".",
+                            ),
                             tombol(
                               "=",
                               bg: Colors.blue,
                               fg: Colors.white,
                               besar: true,
                             ),
-                          ],
-                        ),
-                        Row(
-                          children: [
                             tombol(
-                              "BEP",
-                              bg: Colors.pink,
+                              "M+",
+                              bg: Colors.green,
                               fg: Colors.white,
                             ),
                             tombol(
-                              "CEK",
-                              bg: Colors.black,
-                              fg: Colors.white,
-                            ),
-                            tombol(
-                              "MU",
-                              bg: Colors.grey.shade300,
-                            ),
-                            tombol(
-                              "MC",
+                              "⌫",
                               bg: Colors.grey.shade300,
                             ),
                           ],
@@ -1830,12 +2177,16 @@ class _S extends ConsumerState<HomeDaftarPO> {
                   ),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(
+                      8,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(
                         0xFF2E2E2E,
                       ),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(
+                        8,
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1857,10 +2208,14 @@ class _S extends ConsumerState<HomeDaftarPO> {
                               margin: const EdgeInsets.only(
                                 bottom: 3,
                               ),
-                              padding: const EdgeInsets.all(6),
+                              padding: const EdgeInsets.all(
+                                6,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(4),
+                                borderRadius: BorderRadius.circular(
+                                  4,
+                                ),
                               ),
                               child: Row(
                                 mainAxisAlignment:
@@ -1879,9 +2234,11 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                       Icons.delete,
                                       size: 14,
                                     ),
-                                    onPressed: () => ref
-                                        .read(poProvider.notifier)
-                                        .hapusItem(e.key),
+                                    onPressed: () {
+                                      ref
+                                          .read(poProvider.notifier)
+                                          .hapusItem(e.key);
+                                    },
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(),
                                   ),
