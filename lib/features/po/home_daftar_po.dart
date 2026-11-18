@@ -12,12 +12,12 @@ import 'parse_cepat.dart';
 // Tiap ketik controller ke-reset
 // Angka 1 dan 50 jadi tidak bisa diedit
 class SatuanItem {
-  SatuanItem({
+    SatuanItem({
     required String satuan,
-    required bool dasar,
+    required this.dasar,
     required String qty,
     required String isi,
-    required String op,
+    required this.op,
     required String nominal,
   })  : namaCtrl = TextEditingController(
           text: satuan,
@@ -30,9 +30,7 @@ class SatuanItem {
         ),
         nominalCtrl = TextEditingController(
           text: nominal,
-        ),
-        dasar = dasar,
-        op = op;
+        );
 
   TextEditingController namaCtrl;
   TextEditingController qtyCtrl;
@@ -769,8 +767,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
                         children: suggestions
                             .map(
                               (b) => ActionChip(
-                                label: Text(
-                                  "${b["nama"]}",
+                                                                    label: Text(
+                                  b["nama"].toString(),
                                   style: const TextStyle(
                                     fontSize: 11,
                                   ),
@@ -1622,7 +1620,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
               0,
             ),
             decoration: BoxDecoration(
-              color: isDown ? baseColor.withOpacity(0.85) : baseColor,
+              color: isDown ? baseColor.withValues (alpha: 0.85) : baseColor,
               borderRadius: BorderRadius.circular(
                 8,
               ),
@@ -1641,7 +1639,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                         blurRadius: 0,
                       ),
                       BoxShadow(
-                        color: Colors.white.withOpacity(0.6),
+                        color: Colors.white.withValues (alpha: 0.6),
                         offset: const Offset(
                           0,
                           -1,
