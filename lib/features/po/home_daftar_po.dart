@@ -12,44 +12,38 @@ import 'parse_cepat.dart';
 // Tiap ketik controller ke-reset
 // Angka 1 dan 50 jadi tidak bisa diedit
 class SatuanItem {
-    SatuanItem({
+  SatuanItem({
     required String satuan,
     required this.dasar,
     required String qty,
     required String isi,
     required this.op,
     required String nominal,
-  })  : namaCtrl = TextEditingController(
-          text: satuan,
-        ),
-        qtyCtrl = TextEditingController(
-          text: qty,
-        ),
-        isiCtrl = TextEditingController(
-          text: isi,
-        ),
-        nominalCtrl = TextEditingController(
-          text: nominal,
-        );
+    String satuanBaru = '',
+  })  : namaCtrl = TextEditingController(text: satuan),
+        qtyCtrl = TextEditingController(text: qty),
+        isiCtrl = TextEditingController(text: isi),
+        nominalCtrl = TextEditingController(text: nominal),
+        satuanBaruCtrl = TextEditingController(text: satuanBaru);
 
-  TextEditingController namaCtrl;
-  TextEditingController qtyCtrl;
-  TextEditingController isiCtrl;
-  TextEditingController nominalCtrl;
+  TextEditingController namaCtrl; // [unit] kuning, AUTO = unit biru
+  TextEditingController qtyCtrl; // [bilangan] kiri
+  TextEditingController isiCtrl; // [bilangan] kanan
+  TextEditingController nominalCtrl; // [nominal], tap bisa edit
+  TextEditingController satuanBaruCtrl; // [satuan] kanan, kg / 3m
   bool dasar;
   String op;
+  bool nominalManual = false;
 
   Map<String, dynamic> toMap() {
     return {
       "satuan": namaCtrl.text,
+      "satuanBaru": satuanBaruCtrl.text,
       "dasar": dasar,
       "qty": qtyCtrl.text,
       "isi": isiCtrl.text,
       "op": op,
-      "nominal": nominalCtrl.text.replaceAll(
-        RegExp(r'[^0-9]'),
-        '',
-      ),
+      "nominal": nominalCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
     };
   }
 
@@ -58,6 +52,7 @@ class SatuanItem {
     qtyCtrl.dispose();
     isiCtrl.dispose();
     nominalCtrl.dispose();
+    satuanBaruCtrl.dispose();
   }
 }
 
@@ -114,9 +109,21 @@ class _S extends ConsumerState<HomeDaftarPO> {
     ),
   ];
 
+  // ============================================================
+// FIX B + C - TIMPA DARI "List<SatuanItem> satuanList" SAMPAI
+// SEBELUM "void pencet" - JANGAN TIMPA A / D / E / F
+// ============================================================
+
+// ---------- B : AWAL SATUAN - FIX ----------
+// SALAHNYA KEMARIN:
+// kg jadi dasar, sak x 50 x 50.000 = 2.500.000
+// BETULNYA:
+// sak yang dasar, karena Harga 1 = harga per sak = 50.000
+// kg itu turunan: 1 sak ÷ 50 kg = 1.000 / kg
+
   List<SatuanItem> satuanList = [
     SatuanItem(
-      satuan: "kg",
+      satuan: "sak",
       dasar: true,
       qty: "1",
       isi: "1",
@@ -128,8 +135,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
       dasar: false,
       qty: "1",
       isi: "50",
-      op: "x",
-      nominal: "2500000",
+      op: "÷",
+      nominal: "1000",
     ),
   ];
 
@@ -227,11 +234,18 @@ class _S extends ConsumerState<HomeDaftarPO> {
     );
   }
 
-  // Nominal
-  // qty x isi x harga acuan
-  // 1 sak x 50 kg x Rp 50.000
-  // =
-  // Rp 2.500.000
+// ---------- C : HITUNG NOMINAL - FIX ----------
+// RUMUS LAMA (SALAH, HAPUS):
+// return qty * isi * harga;
+// 1 x 50 x 50.000 = 2.500.000
+//
+// RUMUS BARU (BETUL):
+// Kalau baris dasar (sak) -> langsung harga acuan = 50.000
+// Kalau op ÷ -> harga ÷ isi
+//   1 sak ÷ 50 kg = 50.000 ÷ 50 = 1.000 / kg
+// Kalau op x -> harga x isi (ini untuk PAKET, bukan konversi)
+//   1 m x 3 (3m) = 25.000 x 3 = 75.000 / 3m
+
   double hitungNominal(
     SatuanItem s,
   ) {
@@ -251,18 +265,24 @@ class _S extends ConsumerState<HomeDaftarPO> {
         ) ??
         0;
     final harga = hargaForm > 0 ? hargaForm : hargaAcuan;
+    if (s.dasar) {
+      return harga;
+    }
     if (s.op == "÷") {
       if (isi == 0) {
         return 0;
       }
       return qty * (harga / isi);
     }
-    return qty * isi * harga;
+    return harga * isi;
   }
 
   void refreshNominal(
     SatuanItem s,
   ) {
+    if (s.nominalManual) {
+      return;
+    }
     final hasil = hitungNominal(
       s,
     );
@@ -321,10 +341,14 @@ class _S extends ConsumerState<HomeDaftarPO> {
           ),
           content: const Text(
             "Harga Acuan 100% dari Harga 1.\n\n"
-            "1 sak x 50 kg artinya:\n"
-            "qty 1 x isi 50 x harga acuan\n"
-            "1 x 50 x Rp 50.000 = Rp 2.500.000\n\n"
+            "Harga 1 itu harga per UNIT BIRU (dasar).\n"
+            "Contoh: Harga 1 = 50.000 artinya 1 sak = 50.000.\n\n"
+            "Turunan kg:\n"
+            "1 sak ÷ 50 kg = 50.000 ÷ 50 = 1.000 / kg\n\n"
+            "Paket 3m:\n"
+            "1 m x 3 = 25.000 x 3 = 75.000 / 3m\n\n"
             "Tap (x) untuk ganti jadi (÷).\n"
+            "Tap nominal untuk edit manual, tidak balik lagi.\n"
             "BEP = Acuan x 110%.\n"
             "CEK = lihat step, edit & hapus sebaris.",
           ),
@@ -343,193 +367,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     );
   }
 
-  void bukaCek() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(
-            16,
-          ),
-        ),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx2, setSheet) {
-            return Padding(
-              padding: const EdgeInsets.all(
-                16,
-              ),
-              child: SizedBox(
-                height: 420,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          "CEK - Proses Kalkulasi",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.close,
-                          ),
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                          },
-                        ),
-                      ],
-                    ),
-                    const Text(
-                      "Item | Harga | Kuantiti | Jumlah - bisa edit, bisa hapus sebaris",
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.grey,
-                      ),
-                    ),
-                    const SizedBox(
-                      height: 8,
-                    ),
-                    if (steps.isEmpty)
-                      const Text(
-                        "Belum ada step. Pencet = atau M+ dulu.",
-                      ),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: steps.length,
-                        itemBuilder: (_, i) {
-                          final s = steps[i];
-                          return Container(
-                            margin: const EdgeInsets.only(
-                              bottom: 4,
-                            ),
-                            padding: const EdgeInsets.all(
-                              6,
-                            ),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: Colors.grey.shade300,
-                              ),
-                              borderRadius: BorderRadius.circular(
-                                6,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: TextField(
-                                    controller: TextEditingController(
-                                      text: "${s["item"]}",
-                                    ),
-                                    decoration: const InputDecoration(
-                                      labelText: "Item",
-                                      isDense: true,
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    onChanged: (v) {
-                                      s["item"] = v;
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(
-                                  width: 4,
-                                ),
-                                SizedBox(
-                                  width: 70,
-                                  child: TextField(
-                                    controller: TextEditingController(
-                                      text: "${s["harga"]}",
-                                    ),
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(
-                                      labelText: "Harga",
-                                      isDense: true,
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    onChanged: (v) {
-                                      setSheet(() {
-                                        s["harga"] = double.tryParse(v) ?? 0;
-                                        s["jumlah"] =
-                                            (s["harga"] as double) *
-                                                (s["qty"] as num);
-                                      });
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(
-                                  width: 4,
-                                ),
-                                SizedBox(
-                                  width: 50,
-                                  child: TextField(
-                                    controller: TextEditingController(
-                                      text: "${s["qty"]}",
-                                    ),
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(
-                                      labelText: "Qty",
-                                      isDense: true,
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    onChanged: (v) {
-                                      setSheet(() {
-                                        s["qty"] = double.tryParse(v) ?? 0;
-                                        s["jumlah"] =
-                                            (s["harga"] as double) *
-                                                (s["qty"] as num);
-                                      });
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(
-                                  width: 4,
-                                ),
-                                SizedBox(
-                                  width: 70,
-                                  child: Text(
-                                    formatRupiah(
-                                      (s["jumlah"] as num).toInt(),
-                                    ),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.delete,
-                                    color: Colors.red,
-                                    size: 16,
-                                  ),
-                                  onPressed: () {
-                                    setSheet(() {
-                                      steps.removeAt(i);
-                                    });
-                                    setState(() {});
-                                  },
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
+
 
   void pencet(
     String t,
