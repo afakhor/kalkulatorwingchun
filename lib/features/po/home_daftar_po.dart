@@ -319,26 +319,244 @@ class _S extends ConsumerState<HomeDaftarPO> {
     return "$qty ${s.namaCtrl.text} ${s.op} $isi $dasarNama = ${formatRupiah(nomBersih)}";
   }
 
-  void dialogBabe() {
+    void dialogBabe() {
+    final namaBarang = barangDipilih == null
+        ? "Belum pilih barang (pencet LS)"
+        : "${barangDipilih!["nama"]}";
+    final kodeBarang = barangDipilih == null
+        ? "-"
+        : "${barangDipilih!["kode"]}";
+    final kategoriBarang = barangDipilih == null
+        ? "-"
+        : "${barangDipilih!["kategori"]}";
+    final acuan = hargaAcuan;
+    final nilaiManual = manual;
+    final nilaiPersen = persen;
+    final warna = warnaSaran();
+    final namaWarna = warna == Colors.black
+        ? "HITAM - belum ada acuan / belum input"
+        : warna == const Color(0xFFB71C1C)
+            ? "MERAH TUA - rugi besar (< -20%)"
+            : warna == Colors.red
+                ? "MERAH - rugi (0% s/d -20%)"
+                : warna == const Color(0xFFB58900)
+                    ? "KUNING - waspada (0% s/d 5%)"
+                    : warna == Colors.blue
+                        ? "BIRU - untung kecil (5% s/d 15%)"
+                        : "HIJAU - untung (di atas 15%)";
+    final bep = acuan > 0 ? acuan * 1.1 : 0;
+    final totalStep = steps.fold<double>(
+      0,
+      (a, s) => a + ((s["jumlah"] as num?)?.toDouble() ?? 0),
+    );
     showDialog(
       context: context,
       builder: (ctx) {
         return AlertDialog(
           title: const Text(
-            "BABE.INFO - Dialog Kalkulasi",
+            "BABE.INFO - Dialog Uni",
           ),
-          content: const Text(
-            "Harga Acuan 100% dari Harga 1.\n\n"
-            "Harga 1 itu harga per UNIT BIRU (dasar).\n"
-            "Contoh: Harga 1 = 50.000 artinya 1 sak = 50.000.\n\n"
-            "Turunan kg:\n"
-            "1 sak ÷ 50 kg = 50.000 ÷ 50 = 1.000 / kg\n\n"
-            "Paket 3m:\n"
-            "1 m x 3 = 25.000 x 3 = 75.000 / 3m\n\n"
-            "Tap (x) untuk ganti jadi (÷).\n"
-            "Tap nominal untuk edit manual, tidak balik lagi.\n"
-            "BEP = Acuan x 110%.\n"
-            "CEK = lihat step, edit & hapus sebaris.",
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "YANG SEDANG DILAKUKAN SEKARANG",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(
+                  height: 8,
+                ),
+                Text(
+                  "Barang: $namaBarang",
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  "Kode: $kodeBarang • Kategori: $kategoriBarang",
+                  style: const TextStyle(
+                    fontSize: 11,
+                  ),
+                ),
+                Text(
+                  "Unit Biru (dasar): ${unitCtrl.text.isEmpty ? "-" : unitCtrl.text}",
+                  style: const TextStyle(
+                    fontSize: 11,
+                  ),
+                ),
+                const Divider(),
+                Text(
+                  "Layar kalkulator: $layar",
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  "Harga Acuan (100%): ${acuan == 0 ? "---" : formatRupiah(acuan.toInt())}",
+                  style: const TextStyle(
+                    fontSize: 11,
+                  ),
+                ),
+                Text(
+                  "Manual: ${nilaiManual == 0 ? "---" : formatRupiah(nilaiManual.toInt())}",
+                  style: const TextStyle(
+                    fontSize: 11,
+                  ),
+                ),
+                Text(
+                  "Persen: ${acuan == 0 || nilaiManual == 0 ? "---" : "${nilaiPersen.toStringAsFixed(1)}%"}",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: warna,
+                  ),
+                ),
+                Text(
+                  "Warna: $namaWarna",
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: warna,
+                  ),
+                ),
+                Text(
+                  "BEP (Acuan x 110%): ${bep == 0 ? "---" : formatRupiah(bep.toInt())}",
+                  style: const TextStyle(
+                    fontSize: 11,
+                  ),
+                ),
+                const Divider(),
+                Text(
+                  "Mode: $modeHitung • Desimal: $desimal • Memori: ${formatRupiah(memori.toInt())}",
+                  style: const TextStyle(
+                    fontSize: 11,
+                  ),
+                ),
+                const Divider(),
+                const Text(
+                  "SATUAN KUNING - YANG SEDANG DIINPUT",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(
+                  height: 4,
+                ),
+                if (satuanList.isEmpty)
+                  const Text(
+                    "Belum ada satuan.",
+                    style: TextStyle(
+                      fontSize: 11,
+                    ),
+                  ),
+                ...satuanList.map(
+                  (s) {
+                    final nom = int.tryParse(
+                          s.nominalCtrl.text.replaceAll(
+                            RegExp(r'[^0-9]'),
+                            '',
+                          ),
+                        ) ??
+                        0;
+                    final manualTag = s.nominalManual
+                        ? " • MANUAL (dikunci)"
+                        : " • AUTO";
+                    return Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: 4,
+                      ),
+                      child: Text(
+                        "${teksRumusSatuan(s)}$manualTag",
+                        style: const TextStyle(
+                          fontSize: 11,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(),
+                const Text(
+                  "CEK - STEP YANG SUDAH DILAKUKAN",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(
+                  height: 4,
+                ),
+                if (steps.isEmpty)
+                  const Text(
+                    "Belum ada step. Pencet = atau M+ dulu.",
+                    style: TextStyle(
+                      fontSize: 11,
+                    ),
+                  ),
+                ...steps.asMap().entries.map(
+                  (e) {
+                    final s = e.value;
+                    return Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: 2,
+                      ),
+                      child: Text(
+                        "${e.key + 1}. ${s["item"]} | ${formatRupiah((s["harga"] as num).toInt())} x ${s["qty"]} = ${formatRupiah((s["jumlah"] as num).toInt())}",
+                        style: const TextStyle(
+                          fontSize: 11,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                if (steps.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      top: 4,
+                    ),
+                    child: Text(
+                      "Total step: ${formatRupiah(totalStep.toInt())}",
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                const Divider(),
+                const Text(
+                  "CARA PAKAI",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(
+                  height: 4,
+                ),
+                const Text(
+                  "• Harga 1 = harga per Unit Biru (dasar).\n"
+                  "• 1 sak ÷ 50 kg = 50.000 ÷ 50 = 1.000 / kg\n"
+                  "• 1 m x 3 = 25.000 x 3 = 75.000 / 3m\n"
+                  "• Tap (x) untuk ganti jadi (÷).\n"
+                  "• Tap nominal untuk edit manual, tidak balik lagi.\n"
+                  "• BEP = Acuan x 110%.\n"
+                  "• CEK = lihat step, edit & hapus sebaris.",
+                  style: TextStyle(
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
