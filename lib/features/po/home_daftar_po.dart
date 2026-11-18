@@ -277,25 +277,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
     return harga * isi;
   }
 
-  void refreshNominal(
-    SatuanItem s,
-  ) {
-    if (s.nominalManual) {
-      return;
-    }
-    final hasil = hitungNominal(
-      s,
-    );
-    s.nominalCtrl.text = hasil.toStringAsFixed(0);
+  void refreshNominal(SatuanItem s) {
+  if (s.nominalManual) {
+    return;
   }
-
-  void refreshSemuaNominal() {
-    for (var s in satuanList) {
-      refreshNominal(
-        s,
-      );
-    }
-  }
+  final hasil = hitungNominal(s);
+  s.nominalCtrl.text = hasil.toStringAsFixed(0);
+}
 
   void syncUnitDariDasar() {
     final dasar = satuanList.firstWhere(
