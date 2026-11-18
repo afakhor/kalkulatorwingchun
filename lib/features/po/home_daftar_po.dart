@@ -662,7 +662,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     });
   }
 
-  void bukaListLS() {
+    void bukaListLS() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: false,
@@ -681,9 +681,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
               if (q.isEmpty) {
                 return true;
               }
-              return "${b["nama"]}".toLowerCase().contains(q) ||
-                  "${b["kode"]}".toLowerCase().contains(q) ||
-                  "${b["kategori"]}".toLowerCase().contains(q);
+              return b["nama"].toString().toLowerCase().contains(q) ||
+                  b["kode"].toString().toLowerCase().contains(q) ||
+                  b["kategori"].toString().toLowerCase().contains(q);
             }).toList();
             final suggestions = filtered.take(5).toList();
             return Padding(
@@ -767,7 +767,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                         children: suggestions
                             .map(
                               (b) => ActionChip(
-                                                                    label: Text(
+                                label: Text(
                                   b["nama"].toString(),
                                   style: const TextStyle(
                                     fontSize: 11,
@@ -776,10 +776,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                 onPressed: () {
                                   setState(() {
                                     barangDipilih = {
-                                      "kode": "${b["kode"]}",
-                                      "nama": "${b["nama"]}",
-                                      "kategori": "${b["kategori"]}",
-                                      "harga1": "${b["harga1"]}",
+                                      "kode": b["kode"].toString(),
+                                      "nama": b["nama"].toString(),
+                                      "kategori": b["kategori"].toString(),
+                                      "harga1": b["harga1"].toString(),
                                     };
                                   });
                                   Navigator.pop(ctx);
@@ -817,20 +817,20 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                     ListTile(
                                       leading: CircleAvatar(
                                         child: Text(
-                                          "${b["nama"]}".isEmpty
+                                          b["nama"].toString().isEmpty
                                               ? "?"
-                                              : "${b["nama"]}"[0],
+                                              : b["nama"].toString()[0],
                                         ),
                                       ),
                                       title: Text(
-                                        "${b["nama"]}",
+                                        b["nama"].toString(),
                                       ),
                                       subtitle: Text(
                                         "${b["kode"]} • ${b["kategori"]} • ${b["satuan"] ?? "pcs"}",
                                       ),
                                       trailing: Text(
                                         formatRupiah(
-                                          int.tryParse("${b["harga1"]}") ?? 0,
+                                          int.tryParse(b["harga1"].toString()) ?? 0,
                                         ),
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
@@ -842,10 +842,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                       onTap: () {
                                         setState(() {
                                           barangDipilih = {
-                                            "kode": "${b["kode"]}",
-                                            "nama": "${b["nama"]}",
-                                            "kategori": "${b["kategori"]}",
-                                            "harga1": "${b["harga1"]}",
+                                            "kode": b["kode"].toString(),
+                                            "nama": b["nama"].toString(),
+                                            "kategori": b["kategori"].toString(),
+                                            "harga1": b["harga1"].toString(),
                                           };
                                         });
                                         Navigator.pop(ctx);
@@ -876,11 +876,11 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                                   },
                                                 )["satuan"];
                                                 final nom = double.tryParse(
-                                                      "${m["nominal"]}",
+                                                      m["nominal"].toString(),
                                                     ) ??
                                                     0;
-                                                final qty = "${m["qty"] ?? "1"}";
-                                                final isi = "${m["isi"] ?? "1"}";
+                                                final qty = (m["qty"] ?? "1").toString();
+                                                final isi = (m["isi"] ?? "1").toString();
                                                 final label = m["dasar"] == true
                                                     ? "$qty ${m["satuan"]}"
                                                     : "$qty ${m["satuan"]} = $qty x $isi $dasarSatuan";
@@ -894,17 +894,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                                   onPressed: () {
                                                     setState(() {
                                                       barangDipilih = {
-                                                        "kode": "${b["kode"]}",
-                                                        "nama": "${b["nama"]}",
-                                                        "kategori":
-                                                            "${b["kategori"]}",
-                                                        "harga1":
-                                                            "${nom.toInt()}",
-                                                        "satuan":
-                                                            "${m["satuan"]}",
-                                                        "satuanIsi": "$isi",
-                                                        "satuanOp":
-                                                            "${m["op"]}",
+                                                        "kode": b["kode"].toString(),
+                                                        "nama": b["nama"].toString(),
+                                                        "kategori": b["kategori"].toString(),
+                                                        "harga1": nom.toInt().toString(),
+                                                        "satuan": m["satuan"].toString(),
+                                                        "satuanIsi": isi,
+                                                        "satuanOp": m["op"].toString(),
                                                       };
                                                       layar = nom
                                                           .toStringAsFixed(0);
