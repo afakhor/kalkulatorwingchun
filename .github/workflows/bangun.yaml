@@ -19,8 +19,9 @@ jobs:
       - run: flutter pub run build_runner build --delete-conflicting-outputs
       - run: flutter analyze
       - run: flutter test
-      - run: flutter build apk --release --verbose || true
-      - run: grep -rn "25\.0\.5" android/ "$PUB_CACHE" 2>/dev/null || true
+      - run: flutter build apk --release --verbose 2>&1 | tee build.log || true
+      - run: grep -n -C 15 -E "What went wrong|Caused by:|25\.0\.5|FAILURE:" build.log || true
+
 
       # Tambahkan baris ini agar APK tersimpan sebagai artifact GitHub
       - uses: actions/upload-artifact@v4
