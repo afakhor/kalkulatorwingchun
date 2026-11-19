@@ -84,10 +84,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   String tombolDitekan = "";
   Map<String, String>? barangDipilih;
   bool poTerbuka = false;
-  // MERAH: Nomor series PO. Format: PO B•WC-001B•I, lalu 002, 003, dst. 00 = padding 3 digit.
   int nomorPO = 1;
   String get nomorPOSeries => "PO B\u2022WC-${nomorPO.toString().padLeft(3, '0')}B\u2022I";
-  // PUTIH: tinggi panel PO, bisa dikecil-besarkan tanpa nutup kalkulator
   double poTinggi = 300;
   final List<Map<String, dynamic>> daftarBarang = [];
   String queryLS = "";
@@ -167,14 +165,42 @@ class _S extends ConsumerState<HomeDaftarPO> {
     else mentah = v.toStringAsFixed(desimal);
     return _groupBacktick(mentah);
   }
-  double _pow10(int n) { double r = 1; for (int i = 0; i < n; i++) r *= 10; return r; }
-  String _buangNolBelakang(String s) { if (!s.contains('.')) return s; while (s.endsWith('0')) s = s.substring(0, s.length - 1); if (s.endsWith('.')) s = s.substring(0, s.length - 1); return s.isEmpty ? "0" : s; }
+  double _pow10(int n) {
+    double r = 1;
+    for (int i = 0; i < n; i++) {
+      r *= 10;
+    }
+    return r;
+  }
+  String _buangNolBelakang(String s) {
+    if (!s.contains('.')) {
+      return s;
+    }
+    while (s.endsWith('0')) {
+      s = s.substring(0, s.length - 1);
+    }
+    if (s.endsWith('.')) {
+      s = s.substring(0, s.length - 1);
+    }
+    return s.isEmpty ? "0" : s;
+  }
   // Operasi dasar Casio: a op b. Bagi 0 -> error, bukan 0 diam-diam.
   double? hitungDasar(double a, String o, double b) {
-    if (o == "+") return a + b;
-    if (o == "-") return a - b;
-    if (o == "x") return a * b;
-    if (o == "÷" || o == "/") { if (b == 0) return null; return a / b; }
+    if (o == "+") {
+      return a + b;
+    }
+    if (o == "-") {
+      return a - b;
+    }
+    if (o == "x") {
+      return a * b;
+    }
+    if (o == "÷" || o == "/") {
+      if (b == 0) {
+        return null;
+      }
+      return a / b;
+    }
     return b;
   }
   // ===== RUMUS SATUAN - DARI HARGA 1, BUKAN DARI NOMINAL =====
@@ -331,8 +357,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   // ===== TAX / CSM / ADD2 / ROUND — BARU, LACI TERPISAH =====
   double _angkaLayar() => _parseLayar();
-  void _pencetTaxPlus() { final v = _angkaLayar(); final pajak = v * tarifPajak / 100; layar = formatHasil(v + pajak); ekspresi = "${formatHasil(v)} TAX+ ${tarifPajak}% = ${formatHasil(v + pajak)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": v + pajak}); entryBaru = true; }
-  void _pencetTaxMin() { final v = _angkaLayar(); final bersih = v / (1 + tarifPajak / 100); layar = formatHasil(bersih); ekspresi = "${formatHasil(v)} TAX- ${tarifPajak}% = ${formatHasil(bersih)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": bersih}); entryBaru = true; }
+  void _pencetTaxPlus() { final v = _angkaLayar(); final pajak = v * tarifPajak / 100; layar = formatHasil(v + pajak); ekspresi = "${formatHasil(v)} TAX+ $tarifPajak% = ${formatHasil(v + pajak)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": v + pajak}); entryBaru = true; }
+  void _pencetTaxMin() { final v = _angkaLayar(); final bersih = v / (1 + tarifPajak / 100); layar = formatHasil(bersih); ekspresi = "${formatHasil(v)} TAX- $tarifPajak% = ${formatHasil(bersih)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": bersih}); entryBaru = true; }
   void _setTax() { final v = _angkaLayar(); if (v >= 0 && v <= 100) { tarifPajak = v; ekspresi = "SET TAX = ${formatHasil(v)}%"; layar = formatHasil(v); entryBaru = true; } }
   void _pencetCost() { laciCost = _angkaLayar(); ekspresi = "COST = ${formatHasil(laciCost)}"; entryBaru = true; _hitungCSM(); }
   void _pencetSell() { laciSell = _angkaLayar(); ekspresi = "SELL = ${formatHasil(laciSell)}"; entryBaru = true; _hitungCSM(); }
@@ -385,16 +411,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
         // FIX BIRU - QTY BUKAN LAYAR / HASIL:
         // Kalau habis hitung 5 x 80000 = 400000, qty = 5 (qtyHitung), bukan 400000 (layar).
         // Kalau belum hitung apa-apa, qty = angka di layar.
-        // HITAM FIX: qty = angka PERTAMA sebelum operator (qtyHitung), BUKAN layar (hasil).
-        // Contoh: ketik 5 x 50`000 = 250`000, lalu M+ -> qty harus 5, bukan 250`000.
-        // Kalau adaQtyHitung false tapi lastOp == "x" dan lastAngka2 != 0, qtyHitung masih angka pertama.
-        // HITAM FIX FINAL — qty TIDAK PERNAH = hasil.
-        // Di screenshot: 50`000 x 5 = 250`000, lalu M+ -> qty jadi 250`000 (hasil) x 50`000 = 12`500`000`000. SALAH.
-        // Yang benar: qty dicari dari 3 sumber, urut prioritas:
-        // 1. hasil / hargaBarang kalau habis dibagi (250`000 / 50`000 = 5) — ini yang paling akurat, berlaku untuk 5 x 50`000 MAUPUN 50`000 x 5.
-        // 2. angka KEDUA (lastAngka2) kalau lastOp == "x" — untuk 50`000 x 5, angka kedua = 5.
-        // 3. angka PERTAMA (qtyHitung) kalau 5 x 50`000 dan belum ada barang — angka pertama = 5.
-        // 4. layar langsung kalau belum hitung apa-apa (ketik 5 lalu M+).
         int qtyPO;
         {
           final hasilLayar = _parseLayar();
@@ -402,7 +418,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
           if (hargaB > 0 && hasilLayar > 0 && hasilLayar % hargaB == 0 && (hasilLayar / hargaB) >= 1 && (hasilLayar / hargaB) <= 100000) {
             qtyPO = (hasilLayar / hargaB).round();
           } else if (lastOp == "x" && lastAngka2 > 0 && lastAngka2 <= 100000 && lastAngka2 != hasilLayar) {
-            // 50`000 x 5 -> lastAngka2 = 5. Tapi kalau 5 x 50`000, lastAngka2 = 50`000, jangan pakai ini — jatuh ke qtyHitung di bawah.
             qtyPO = (lastAngka2 <= 1000 && qtyHitung > 1000) ? lastAngka2.round() : (adaQtyHitung ? qtyHitung.round() : lastAngka2.round());
             if (qtyPO > 1000 && hargaB > 0) { qtyPO = qtyHitung.round(); }
           } else if (adaQtyHitung) {
@@ -464,7 +479,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
         const SizedBox(height: 8),
         TextField(controller: katC, decoration: dec("Kategori")),
         const SizedBox(height: 8),
-        TextField(controller: hargaC, keyboardType: TextInputType.number, decoration: dec("Harga 1 (Harga per satuan dasar)")),
+        TextField(controller: hargaC, keyboardType: TextInputType.number, decoration: dec("Harga 1")),
       ])),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("BATAL")),
@@ -613,7 +628,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   @override Widget build(BuildContext context) {
     final po = ref.watch(poProvider);
-    final hasil = ref.read(poProvider.notifier).hitungTotal();
     // SUBTOTAL FIX: hitung dari item PO yang sudah benar (qty x harga), bukan dari layar.
     // Kalau provider salah hitung, hitung ulang di sini sebagai pengaman:
     final subtotalAman = po.items.fold<double>(0, (a, it) => a + (it.qty * it.hargaSatuan));
@@ -651,13 +665,12 @@ class _S extends ConsumerState<HomeDaftarPO> {
       body: SafeArea(child: Column(children: [
         headerKalkulator,
         if (poTerbuka)
-          Container(height: poTinggi, child: Container(color: const Color(0xFF2E2E2E), padding: const EdgeInsets.all(12),
+          SizedBox(height: poTinggi, child: Container(color: const Color(0xFF2E2E2E), padding: const EdgeInsets.all(12),
             child: Column(children: [
-              // PUTIH: Handle tarik — tap panah = kecil/besar, drag = geser tinggi. Layar kalkulator di atas TIDAK ketutup.
               GestureDetector(
                 onTap: () => setState(() { poTinggi = poTinggi > 250 ? 180 : 380; }),
                 onVerticalDragUpdate: (d) => setState(() { poTinggi = (poTinggi + d.delta.dy).clamp(160.0, 480.0); }),
-                child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 2), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.keyboard_arrow_up, color: Colors.white, size: 22), const Text("Geser / tap untuk kecil-besar — kalkulator tetap kelihatan", style: TextStyle(color: Colors.white70, fontSize: 10))])),
+                child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 2), child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.keyboard_arrow_up, color: Colors.white, size: 22), Text("Geser / tap untuk kecil-besar — kalkulator tetap kelihatan", style: TextStyle(color: Colors.white70, fontSize: 10))])),
               ),
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(nomorPOSeries, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)), const Text("PO - Daftar Item", style: TextStyle(color: Colors.white70, fontSize: 11))]), IconButton(icon: const Icon(Icons.close, color: Colors.white), tooltip: "Tutup PO, balik ke keypad", onPressed: () => setState(() { poTerbuka = false; }))]),
               const SizedBox(height: 6),
@@ -670,8 +683,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text("${i + 1}. ${it.namaBarang}", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 2),
-                      // HITAM: Subtotal per item = qty op harga op bilangan op bilangan. Di sini op = x, bilangan = harga.
-                      // Rumus ditampilkan lengkap, jumlah TIDAK pernah qty = hasil x harga lagi.
                       Text("${it.qty}  x  ${formatRupiah(it.hargaSatuan)}  =  ${formatRupiah(jumlah.toInt())}", style: const TextStyle(fontSize: 12)),
                       Text("Subtotal item = ${formatRupiah(jumlah.toInt())}", style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
                     ])),
@@ -689,11 +700,11 @@ class _S extends ConsumerState<HomeDaftarPO> {
               ),
             ]),
           )),
-          Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), color: Colors.grey.shade100, child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+          SizedBox(width: double.infinity, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), color: Colors.grey.shade100, child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
             _chipFungsi("TAX+", Colors.teal), _chipFungsi("TAX-", Colors.teal), _chipFungsi("SET TAX", Colors.teal.shade100),
             _chipFungsi("COST", Colors.indigo), _chipFungsi("SELL", Colors.indigo), _chipFungsi("MARGIN", Colors.indigo), _chipFungsi("CSM CLR", Colors.grey.shade300),
             _chipFungsi("ROUND", Colors.amber.shade100), _chipFungsi("ADD2", Colors.amber.shade100), _chipFungsi("GT", Colors.black),
-          ]))),
+          ])))),
           Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(10, 18, 10, 10),
             child: Column(children: [
               Expanded(child: Row(children: [tombol("AC", bg: Colors.blue.shade400, fg: Colors.white), tombol("MRC", bg: Colors.grey.shade400), tombol("M-", bg: Colors.grey.shade400), tombol("M+", bg: Colors.green, fg: Colors.white, besar: true), tombol("LS", bg: Colors.orange.shade100, besar: true), tombol("CEK", bg: Colors.black, fg: Colors.white), tombol("BEP", bg: Colors.pink, fg: Colors.white)])),
