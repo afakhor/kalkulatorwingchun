@@ -5,6 +5,7 @@ import '../../core/formatter.dart';
 import 'po_provider.dart';
 import 'parse_cepat.dart';
 
+
 class SatuanItem {
   SatuanItem({required String satuan, required this.dasar, required String qty, required String isi, required this.op, required String nominal, String satuanBaru = ''})
       : namaCtrl = TextEditingController(text: satuan),
