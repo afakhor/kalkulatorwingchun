@@ -143,6 +143,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   // ===== BACKTICK LAYAR KALKULATOR =====
   // Penyebab layar polos: layar pakai formatHasil(), bukan formatRupiah(). formatHasil lama cuma toStringAsFixed(), tanpa grouping.
+
   String _stripBacktick(String s) => s.replaceAll('`', '').replaceAll('Rp', '').replaceAll(' ', '');
   double _parseLayar() => double.tryParse(_stripBacktick(layar)) ?? 0;
   String _groupBacktick(String s) {
@@ -155,23 +156,28 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (parts.length > 1) hasil = "$hasil.${parts[1]}";
     return neg ? "-$hasil" : hasil;
   }
-  String formatHasil(double v) {
-    if (v.isNaN || v.isInfinite) return "E";
+
+    String formatHasil(double v) {
+    if (v.isNaN || v.isInfinite) {
+      return "E";
+    }
     String mentah;
-    if (modeHitung == "ORIGINAL") mentah = v.toStringAsFixed(desimal);
-    else if (modeRound == "CUT") { final p = desimal == 0 ? 1.0 : _pow10(desimal); final potong = (v * p).truncate() / p; mentah = desimal == 0 ? potong.round().toString() : potong.toStringAsFixed(desimal); }
-    else if (modeRound == "F") mentah = _buangNolBelakang(v.toStringAsFixed(6));
-    else if (desimal == 0) mentah = v.round().toString();
-    else mentah = v.toStringAsFixed(desimal);
+    if (modeHitung == "ORIGINAL") {
+      mentah = v.toStringAsFixed(desimal);
+    } else if (modeRound == "CUT") {
+      final p = desimal == 0 ? 1.0 : _pow10(desimal);
+      final potong = (v * p).truncate() / p;
+      mentah = desimal == 0 ? potong.round().toString() : potong.toStringAsFixed(desimal);
+    } else if (modeRound == "F") {
+      mentah = _buangNolBelakang(v.toStringAsFixed(6));
+    } else if (desimal == 0) {
+      mentah = v.round().toString();
+    } else {
+      mentah = v.toStringAsFixed(desimal);
+    }
     return _groupBacktick(mentah);
   }
-  double _pow10(int n) {
-    double r = 1;
-    for (int i = 0; i < n; i++) {
-      r *= 10;
-    }
-    return r;
-  }
+
   String _buangNolBelakang(String s) {
     if (!s.contains('.')) {
       return s;
