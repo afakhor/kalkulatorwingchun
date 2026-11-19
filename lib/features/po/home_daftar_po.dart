@@ -433,7 +433,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                       ]),
                     ),
                   );
-                }))),
+                })),
               ])),
             );
           },
@@ -539,7 +539,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("BASKORO WINGCHUN", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)), GestureDetector(onTap: dialogBabe, child: const Text("BABE.INFO - dialog kalkulasi", style: TextStyle(color: Colors.white70, fontSize: 9, decoration: TextDecoration.underline)))]),
         const SizedBox(height: 6),
         // Panel solar Casio + label DJ-120
-        Row(children: [Expanded(child: Container(height: 14, decoration: BoxDecoration(color: const Color(0xFF3A2A1A), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.black54)), child: Row(children: List.generate(5, (i) => Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2), color: const Color(0xFF5A3D22)))))), const SizedBox(width: 8), const Text("DJ-120  •  12 DIGIT", style: TextStyle(color: Colors.white54, fontSize: 8, fontWeight: FontWeight.bold))]),
+        Row(children: [Expanded(child: Container(height: 14, decoration: BoxDecoration(color: const Color(0xFF3A2A1A), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.black54)), child: Row(children: List.generate(5, (i) => Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2), color: const Color(0xFF5A3D22))))))), const SizedBox(width: 8), const Text("DJ-120  •  12 DIGIT", style: TextStyle(color: Colors.white54, fontSize: 8, fontWeight: FontWeight.bold))]),
         const SizedBox(height: 6),
         Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: BoxDecoration(color: const Color(0xFFDDE8D0), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.black26)),
           child: Column(children: [
