@@ -114,7 +114,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (barangDipilih != null) return double.tryParse("${barangDipilih!["harga1"]}") ?? 0;
     return 0;
   }
-  double get manual => double.tryParse(layar) ?? 0;
+  double get manual => double.tryParse(_stripBacktick(layar)) ?? 0;
   double get persen {
     if (hargaAcuan == 0) return 0;
     if (manual == 0) return 0;
@@ -138,13 +138,31 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (manual == 0) return "---";
     return "${persen.toStringAsFixed(1)}%";
   }
+  // ===== BACKTICK LAYAR KALKULATOR =====
+  // Penyebab layar polos: layar pakai formatHasil(), bukan formatRupiah(). formatHasil lama cuma toStringAsFixed(), tanpa grouping.
+  String _stripBacktick(String s) => s.replaceAll('`', '').replaceAll('Rp', '').replaceAll(' ', '');
+  double _parseLayar() => double.tryParse(_stripBacktick(layar)) ?? 0;
+  String _groupBacktick(String s) {
+    if (s == "E" || s.isEmpty) return s;
+    s = _stripBacktick(s); // strip dulu, biar tidak grouping 2x jadi "50000`"
+    var neg = false; if (s.startsWith('-')) { neg = true; s = s.substring(1); }
+    var parts = s.split('.'); var integer = parts[0].isEmpty ? "0" : parts[0];
+    final groups = <String>[];
+    while (integer.length > 3) { groups.insert(0, integer.substring(integer.length - 3)); integer = integer.substring(0, integer.length - 3); }
+    groups.insert(0, integer);
+    var hasil = groups.join('`');
+    if (parts.length > 1) hasil = "$hasil.${parts[1]}";
+    return neg ? "-$hasil" : hasil;
+  }
   String formatHasil(double v) {
     if (v.isNaN || v.isInfinite) return "E";
-    if (modeHitung == "ORIGINAL") return v.toStringAsFixed(desimal);
-    if (modeRound == "CUT") { final p = desimal == 0 ? 1.0 : _pow10(desimal); final potong = (v * p).truncate() / p; if (desimal == 0) return potong.round().toString(); return potong.toStringAsFixed(desimal); }
-    if (modeRound == "F") return _buangNolBelakang(v.toStringAsFixed(6));
-    if (desimal == 0) return v.round().toString();
-    return v.toStringAsFixed(desimal);
+    String mentah;
+    if (modeHitung == "ORIGINAL") mentah = v.toStringAsFixed(desimal);
+    else if (modeRound == "CUT") { final p = desimal == 0 ? 1.0 : _pow10(desimal); final potong = (v * p).truncate() / p; mentah = desimal == 0 ? potong.round().toString() : potong.toStringAsFixed(desimal); }
+    else if (modeRound == "F") mentah = _buangNolBelakang(v.toStringAsFixed(6));
+    else if (desimal == 0) mentah = v.round().toString();
+    else mentah = v.toStringAsFixed(desimal);
+    return _groupBacktick(mentah);
   }
   double _pow10(int n) { double r = 1; for (int i = 0; i < n; i++) r *= 10; return r; }
   String _buangNolBelakang(String s) { if (!s.contains('.')) return s; while (s.endsWith('0')) s = s.substring(0, s.length - 1); if (s.endsWith('.')) s = s.substring(0, s.length - 1); return s.isEmpty ? "0" : s; }
@@ -243,16 +261,18 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   void _inputAngka(String t) {
     if (adaError) { layar = "0"; ekspresi = ""; akumulator = 0; opPending = ""; op = ""; adaError = false; entryBaru = true; }
+    layar = _stripBacktick(layar); // layar mungkin sudah berisi ` dari formatHasil sebelumnya
     if (entryBaru) { layar = (t == ".") ? "0." : t; entryBaru = false; adaQtyHitung = false; }
     else {
       if (t == "." && layar.contains(".")) return;
-      if (layar.replaceAll("-", "").replaceAll(".", "").length >= 12) return; // Casio 12 digit
+      if (layar.replaceAll("-", "").replaceAll(".", "").length >= 12) return; // Casio 12 digit, hitung digit saja, bukan `
       if (layar == "0" && t != ".") { layar = t; } else { layar += t; }
     }
+    layar = _groupBacktick(layar); // langsung tampil 1`000 saat ketik, bukan nunggu =
   }
   void _inputOperator(String t) {
     if (adaError) return;
-    final cur = double.tryParse(layar) ?? 0;
+    final cur = double.tryParse(_stripBacktick(layar)) ?? 0;
     // FIX KEPENCET OPERATOR 2x: 1000 + lalu kepencet - -> cuma ganti operator, angka tetap 1000.
     if (opPending.isNotEmpty && entryBaru) { opPending = t; op = t; ekspresi = "${formatHasil(akumulator)} $t"; entryBaru = true; return; }
     // Casio chain: 2 + 3 + -> hitung 2+3 dulu, baru tunggu angka berikutnya
@@ -271,7 +291,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   void _inputSamaDengan() {
     if (adaError) return;
-    final cur = double.tryParse(layar) ?? 0;
+    final cur = double.tryParse(_stripBacktick(layar)) ?? 0;
     double a, b; String o;
     if (opPending.isNotEmpty) {
       a = akumulator; b = cur; o = opPending;
@@ -294,7 +314,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   void _inputPersen() {
     if (adaError) return;
-    final cur = double.tryParse(layar) ?? 0;
+    final cur = double.tryParse(_stripBacktick(layar)) ?? 0;
     // Casio %: 200 + 10% = 220 | 200 x 10% = 20 | 200 - 10% = 180 | 200 ÷ 10% = 2000
     double h;
     if (opPending == "+") { h = akumulator + (akumulator * cur / 100); }
@@ -307,7 +327,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     layar = formatHasil(h); akumulator = h; angka1 = h; opPending = ""; op = ""; entryBaru = true;
   }
   // ===== TAX / CSM / ADD2 / ROUND — BARU, LACI TERPISAH =====
-  double _angkaLayar() => double.tryParse(layar) ?? 0;
+  double _angkaLayar() => _parseLayar();
   void _pencetTaxPlus() { final v = _angkaLayar(); final pajak = v * tarifPajak / 100; layar = formatHasil(v + pajak); ekspresi = "${formatHasil(v)} TAX+ ${tarifPajak}% = ${formatHasil(v + pajak)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": v + pajak}); entryBaru = true; }
   void _pencetTaxMin() { final v = _angkaLayar(); final bersih = v / (1 + tarifPajak / 100); layar = formatHasil(bersih); ekspresi = "${formatHasil(v)} TAX- ${tarifPajak}% = ${formatHasil(bersih)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": bersih}); entryBaru = true; }
   void _setTax() { final v = _angkaLayar(); if (v >= 0 && v <= 100) { tarifPajak = v; ekspresi = "SET TAX = ${formatHasil(v)}%"; layar = formatHasil(v); entryBaru = true; } }
@@ -355,16 +375,16 @@ class _S extends ConsumerState<HomeDaftarPO> {
       else if (t == "GT") { layar = formatHasil(grandTotal); ekspresi = "GT = ${formatHasil(grandTotal)}"; entryBaru = true; }
       else if (t == "BEP") {
         if (hargaAcuan > 0) { layar = formatHasil(hargaAcuan * 1.1); ekspresi = "BEP = Acuan x 110%"; }
-        else { layar = formatHasil((double.tryParse(layar) ?? 0) + 120); }
+        else { layar = formatHasil((double.tryParse(_stripBacktick(layar)) ?? 0) + 120); }
         entryBaru = true;
       }
       else if (t == "M+") {
         // FIX BIRU - QTY BUKAN LAYAR / HASIL:
         // Kalau habis hitung 5 x 80000 = 400000, qty = 5 (qtyHitung), bukan 400000 (layar).
         // Kalau belum hitung apa-apa, qty = angka di layar.
-        final qtyPO = adaQtyHitung ? qtyHitung.round() : (int.tryParse(layar) ?? 1);
+        final qtyPO = adaQtyHitung ? qtyHitung.round() : (int.tryParse(_stripBacktick(layar)) ?? 1);
         final qtyAman = qtyPO <= 0 ? 1 : qtyPO;
-        memori += double.tryParse(layar) ?? 0;
+        memori += double.tryParse(_stripBacktick(layar)) ?? 0;
         if (barangDipilih != null) {
           final harga = int.tryParse("${barangDipilih!["harga1"]}") ?? 0;
           final jumlah = qtyAman * harga; // SUBTOTAL PER ITEM = qty x harga satuan. Bukan qty = subtotal.
@@ -374,21 +394,21 @@ class _S extends ConsumerState<HomeDaftarPO> {
         }
         layar = "0"; entryBaru = true; adaQtyHitung = false;
       }
-      else if (t == "M-") { memori -= double.tryParse(layar) ?? 0; layar = "0"; entryBaru = true; }
+      else if (t == "M-") { memori -= double.tryParse(_stripBacktick(layar)) ?? 0; layar = "0"; entryBaru = true; }
       else if (t == "MRC") { layar = formatHasil(memori); memori = 0; entryBaru = true; }
       else if (t == "MR") { layar = formatHasil(memori); entryBaru = true; }
       else if (t == "MC") { memori = 0; layar = "0"; entryBaru = true; }
       else if (t == "MU") {
         // Casio MU (Mark-Up): Harga modal 100, MU 20 -> Harga jual = 100 / (1 - 20%) = 125
         // Di sini: layar = modal, MU = +10% BEP cepat. Pakai rumus MU beneran dengan 10%:
-        final modal = double.tryParse(layar) ?? 0;
+        final modal = double.tryParse(_stripBacktick(layar)) ?? 0;
         final jual = modal / (1 - 0.10);
         ekspresi = "MU 10% dari ${formatHasil(modal)}";
         layar = formatHasil(jual); entryBaru = true;
       }
       else if (t == "▶" || t == "⌫") {
         if (adaError) { layar = "0"; adaError = false; entryBaru = true; }
-        else if (!entryBaru) { if (layar.length > 1) { layar = layar.substring(0, layar.length - 1); } else { layar = "0"; } }
+        else if (!entryBaru) { if (layar.length > 1) { layar = _groupBacktick(_stripBacktick(layar).substring(0, _stripBacktick(layar).length - 1)); if (layar.isEmpty || layar == "-") layar = "0"; } else { layar = "0"; } }
       }
       else if (["+", "-", "x", "÷", "/"].contains(t)) { _inputOperator(t); }
       else if (t == "=") { if (modeAdd2 && opPending.isEmpty) { layar = formatHasil(_terapkanAdd2(_angkaLayar())); } _inputSamaDengan(); }
