@@ -11,19 +11,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        id: setup-java
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set Gradle Java Home to JDK 17
+        run: echo "org.gradle.java.home=${{ steps.setup-java.outputs.path }}" >> android/gradle.properties
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.35.0'
           channel: 'stable'
+
       - run: flutter pub get
       - run: flutter pub run build_runner build --delete-conflicting-outputs
       - run: flutter analyze
       - run: flutter test
-      - run: flutter build apk --release --verbose 2>&1 | tee build.log || true
-      - run: grep -n -C 15 -E "What went wrong|Caused by:|25\.0\.5|FAILURE:" build.log || true
+      - run: flutter build apk --release
 
-
-      # Tambahkan baris ini agar APK tersimpan sebagai artifact GitHub
       - uses: actions/upload-artifact@v4
         with:
           name: kalkulator-wingchun-apk
