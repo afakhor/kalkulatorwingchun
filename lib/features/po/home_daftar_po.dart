@@ -688,7 +688,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                 ]),
               ),
             ]),
-          ))
+          )),
           Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), color: Colors.grey.shade100, child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
             _chipFungsi("TAX+", Colors.teal), _chipFungsi("TAX-", Colors.teal), _chipFungsi("SET TAX", Colors.teal.shade100),
             _chipFungsi("COST", Colors.indigo), _chipFungsi("SELL", Colors.indigo), _chipFungsi("MARGIN", Colors.indigo), _chipFungsi("CSM CLR", Colors.grey.shade300),
