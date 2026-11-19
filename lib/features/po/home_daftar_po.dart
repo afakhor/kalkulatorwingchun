@@ -30,8 +30,8 @@ class SatuanItem {
 // FIELD AUTO-LEBAR: lebar ikut isi ketikan.
 // Min 44 (angka), max 150 (teks panjang). Dipakai di CEK + Satuan.
 class _AutoField extends StatefulWidget {
-  const _AutoField({required this.controller, this.hint = "", this.angka = false, this.onChanged, this.min = 44, this.max = 150, this.prefix});
-  final TextEditingController controller; final String hint; final bool angka; final ValueChanged<String>? onChanged; final double min; final double max; final String? prefix;
+  const _AutoField({required this.controller, this.hint = "", this.angka = false, this.onChanged, this.min = 44, this.max = 150});
+  final TextEditingController controller; final String hint; final bool angka; final ValueChanged<String>? onChanged; final double min; final double max;
   @override State<_AutoField> createState() => _AutoFieldS();
 }
 class _AutoFieldS extends State<_AutoField> {
@@ -40,11 +40,11 @@ class _AutoFieldS extends State<_AutoField> {
   @override void dispose() { widget.controller.removeListener(_ukur); super.dispose(); }
   void _ukur() {
     final tp = TextPainter(text: TextSpan(text: widget.controller.text.isEmpty ? widget.hint : widget.controller.text, style: const TextStyle(fontSize: 13)), textDirection: TextDirection.ltr)..layout();
-    final nw = (tp.width + 26 + (widget.prefix != null ? 28 : 0)).clamp(widget.min, widget.max);
+    final nw = (tp.width + 26).clamp(widget.min, widget.max);
     if ((nw - w).abs() > 1) setState(() => w = nw);
   }
   @override Widget build(BuildContext context) {
-    return SizedBox(width: w, child: TextField(controller: widget.controller, keyboardType: widget.angka ? TextInputType.number : TextInputType.text, textAlign: widget.angka ? TextAlign.center : TextAlign.left, style: const TextStyle(fontSize: 13), decoration: InputDecoration(hintText: widget.hint, prefixText: widget.prefix, isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11), border: const OutlineInputBorder()), onChanged: (v) { _ukur(); widget.onChanged?.call(v); }));
+    return SizedBox(width: w, child: TextField(controller: widget.controller, keyboardType: widget.angka ? TextInputType.number : TextInputType.text, textAlign: widget.angka ? TextAlign.center : TextAlign.left, style: const TextStyle(fontSize: 13), decoration: InputDecoration(hintText: widget.hint, isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11), border: const OutlineInputBorder()), onChanged: (v) { _ukur(); widget.onChanged?.call(v); }));
   }
 }
 
@@ -179,7 +179,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       ])),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Tutup"))]));
   }
-  void refreshSemuaNominal() { for (var s in satuanList) refreshNominal(s); }
+  void refreshSemuaNominal() { for (var s in satuanList){ refreshNominal(s); }}
   void bukaCek() {
     showModalBottomSheet(context: context, isScrollControlled: true, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) => StatefulBuilder(builder: (ctx2, setSheet) => Padding(padding: EdgeInsets.only(left: 12, right: 12, top: 12, bottom: MediaQuery.of(ctx).viewInsets.bottom + 12),
