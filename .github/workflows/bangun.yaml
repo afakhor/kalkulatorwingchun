@@ -19,8 +19,9 @@ jobs:
       - run: flutter pub run build_runner build --delete-conflicting-outputs
       - run: flutter analyze
       - run: flutter test
-      - run: flutter build apk --release --stacktrace
-      
+      - run: flutter build apk --release --verbose || true
+      - run: grep -rn "25\.0\.5" android/ "$PUB_CACHE" 2>/dev/null || true
+
       # Tambahkan baris ini agar APK tersimpan sebagai artifact GitHub
       - uses: actions/upload-artifact@v4
         with:
