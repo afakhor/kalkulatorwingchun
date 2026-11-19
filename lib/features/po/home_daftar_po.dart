@@ -178,6 +178,14 @@ class _S extends ConsumerState<HomeDaftarPO> {
     return _groupBacktick(mentah);
   }
 
+  double _pow10(int n) {
+    double r = 1;
+    for (int i = 0; i < n; i++) {
+      r *= 10;
+    }
+    return r;
+  }
+
   String _buangNolBelakang(String s) {
     if (!s.contains('.')) {
       return s;
