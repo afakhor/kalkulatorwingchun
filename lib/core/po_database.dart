@@ -1,22 +1,25 @@
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
-// PO + Log Step + Cache Pelanggan, tersimpan di SQLite (sqflite, tanpa codegen).
+// PO + Log Step + Cache Pelanggan + Alias Copas, tersimpan di SQLite (sqflite, tanpa codegen).
 //
 // Modelnya:
 //   - Log step (riwayat) = 1 step = 1 subtotal. Tiap step baru langsung tercatat.
 //     Riwayat TIDAK nunggu PO.
 //   - PO = kumpulan step (1 paragraf). Disimpan lewat tombol "Simpan PO".
 //   - Pelanggan = nama yang pernah diinput sekali -> dipakai lagi untuk saran otomatis.
+//   - Alias copas = pasangan nama copasan -> kode barang LS, dipelajari dari pilih
+//     manual di CPS. Lain kali nama copasan yang sama langsung cocok otomatis.
 //
 // Tabel:
 //   po_tersimpan      -> 1 baris = 1 PO (nomor, tanggal, pelanggan, total)
 //   po_item_tersimpan -> step / item di dalam 1 PO
 //   log_step          -> log tiap step (riwayat)
 //   pelanggan         -> cache nama pelanggan
+//   alias_copas       -> nama copasan -> kode barang LS
 class PoDatabase {
   static const _namaFile = 'po_kalkulator.sqlite';
-  static const _versi = 2;
+  static const _versi = 3;
 
   Future<Database>? _dbFuture;
 
@@ -67,6 +70,13 @@ class PoDatabase {
             'nama TEXT NOT NULL, '
             'terakhir_dipakai INTEGER NOT NULL)',
           );
+          await db.execute(
+            'CREATE TABLE alias_copas('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'nama_copas TEXT NOT NULL, '
+            'kode_barang TEXT NOT NULL, '
+            'terakhir_dipakai INTEGER NOT NULL)',
+          );
         },
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) {
@@ -92,6 +102,15 @@ class PoDatabase {
             } catch (_) {
               // Kolom sudah ada (DB pernah dibuat versi 2) -> lewati.
             }
+          }
+          if (oldVersion < 3) {
+            await db.execute(
+              'CREATE TABLE IF NOT EXISTS alias_copas('
+              'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+              'nama_copas TEXT NOT NULL, '
+              'kode_barang TEXT NOT NULL, '
+              'terakhir_dipakai INTEGER NOT NULL)',
+            );
           }
         });
   }
@@ -248,6 +267,31 @@ class PoDatabase {
       await db.insert('pelanggan', {'nama': v, 'terakhir_dipakai': skrg});
     } else {
       await db.update('pelanggan', {'terakhir_dipakai': skrg},
+          where: 'id = ?', whereArgs: [ada.first['id']]);
+    }
+  }
+
+  // ===== ALIAS COPAS (nama copasan -> kode barang LS) =====
+  Future<Map<String, String>> muatAliasCopas() async {
+    final db = await _database;
+    final rows = await db.query('alias_copas', orderBy: 'terakhir_dipakai DESC');
+    return {for (final r in rows) "${r['nama_copas']}": "${r['kode_barang']}"};
+  }
+
+  Future<void> simpanAliasCopas(
+      {required String namaCopas, required String kodeBarang}) async {
+    final kunci = namaCopas.trim().toLowerCase();
+    if (kunci.isEmpty || kodeBarang.isEmpty) return;
+    final db = await _database;
+    final skrg = DateTime.now().millisecondsSinceEpoch;
+    final ada = await db.query('alias_copas',
+        where: 'nama_copas = ?', whereArgs: [kunci]);
+    if (ada.isEmpty) {
+      await db.insert('alias_copas',
+          {'nama_copas': kunci, 'kode_barang': kodeBarang, 'terakhir_dipakai': skrg});
+    } else {
+      await db.update('alias_copas',
+          {'kode_barang': kodeBarang, 'terakhir_dipakai': skrg},
           where: 'id = ?', whereArgs: [ada.first['id']]);
     }
   }
