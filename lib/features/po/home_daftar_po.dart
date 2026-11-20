@@ -46,6 +46,68 @@ class _AutoFieldS extends State<_AutoField> {
   }
 }
 
+// Field lebar ngikutin teks + label melayang di tengah border atas saat di-tap.
+// Dipakai untuk "unit" (kiri) dan "satuan" (kanan) di baris Satuan.
+// - Lebar = yang lebih panjang antara isi dan label, + padding kecil. Bukan lebar fix 140.
+// - Label: saat field kosong & belum di-tap, label duduk di dalam field.
+//   Saat di-tap / ada isi, label naik nembus border atas, pas di tengah (floatingLabelAlignment center).
+class _LabelField extends StatefulWidget {
+  const _LabelField({required this.controller, required this.label, this.angka = false, this.onChanged, this.min = 44, this.max = 150});
+  final TextEditingController controller;
+  final String label;
+  final bool angka;
+  final ValueChanged<String>? onChanged;
+  final double min;
+  final double max;
+  @override
+  State<_LabelField> createState() => _LabelFieldS();
+}
+
+class _LabelFieldS extends State<_LabelField> {
+  double w = 56;
+  @override
+  void initState() {
+    super.initState();
+    _ukur();
+    widget.controller.addListener(_ukur);
+  }
+  @override
+  void dispose() {
+    widget.controller.removeListener(_ukur);
+    super.dispose();
+  }
+  void _ukur() {
+    final tpIsi = TextPainter(text: TextSpan(text: widget.controller.text, style: const TextStyle(fontSize: 13)), textDirection: TextDirection.ltr)..layout();
+    final tpLabel = TextPainter(text: TextSpan(text: widget.label, style: const TextStyle(fontSize: 12)), textDirection: TextDirection.ltr)..layout();
+    final lebar = tpIsi.width > tpLabel.width ? tpIsi.width : tpLabel.width;
+    final nw = (lebar + 20).clamp(widget.min, widget.max);
+    if ((nw - w).abs() > 1) setState(() => w = nw);
+  }
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: w,
+      child: TextField(
+        controller: widget.controller,
+        keyboardType: widget.angka ? TextInputType.number : TextInputType.text,
+        textAlign: widget.angka ? TextAlign.center : TextAlign.left,
+        style: const TextStyle(fontSize: 13),
+        decoration: InputDecoration(
+          labelText: widget.label,
+          floatingLabelAlignment: FloatingLabelAlignment.center,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11),
+          border: const OutlineInputBorder(),
+        ),
+        onChanged: (v) {
+          _ukur();
+          widget.onChanged?.call(v);
+        },
+      ),
+    );
+  }
+}
+
 class HomeDaftarPO extends ConsumerStatefulWidget {
   const HomeDaftarPO({super.key});
   @override ConsumerState<HomeDaftarPO> createState() => _S();
@@ -1229,7 +1291,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
               ...varianCtrls.asMap().entries.map((e) { return Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(children: [Expanded(child: TextField(controller: e.value, decoration: dec("Hitam"), onChanged: (v) => tambahKeDaftarSatuan(v))), IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: () => setSheet(() { if (varianCtrls.length > 1) { varianCtrls.removeAt(e.key); } })) ])); }),
               const SizedBox(height: 12),
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Satuan", style: TextStyle(fontWeight: FontWeight.bold)), ElevatedButton(onPressed: () => setSheet(() { satuanList.add(SatuanItem(satuan: unitCtrl.text, dasar: false, qty: "1", isi: "1", op: "÷", nominal: "0", satuanBaru: "")); syncSatuanKiri(); }), child: const Text("+Tambah Satuan", style: TextStyle(fontSize: 11)))]),
-              const Text("KIRI: bilangan bebas + satuan BIRU ikut Harga 1 (auto ngikut saat unit diedit). KANAN: isi + unit HIJAU = satuan baru, masuk list. Baris bawah (merah) = INFO dari Harga 1, bukan dari field Rp.", style: TextStyle(fontSize: 10, color: Colors.grey)),
+              const Text("KIRI: qty + field unit. KANAN: isi + field satuan. Tap field — label unit / satuan naik nembus border atas tengah. Lebar field ngikutin panjang teks. Baris bawah (merah) = INFO dari Harga 1, bukan dari field Rp.", style: TextStyle(fontSize: 10, color: Colors.grey)),
               const SizedBox(height: 6),
               ...satuanList.asMap().entries.map((e) {
                 final it = e.value;
@@ -1238,13 +1300,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
                     Row(children: [
                       _AutoField(controller: it.qtyCtrl, hint: "1", angka: true, min: 44, max: 90, onChanged: (v) => setSheet(() { it.nominalManual = false; refreshNominal(it); })),
                       const SizedBox(width: 4),
-                      Container(constraints: const BoxConstraints(minWidth: 52, maxWidth: 140), height: 40, alignment: Alignment.center, padding: const EdgeInsets.symmetric(horizontal: 6), decoration: BoxDecoration(color: Colors.blue.shade50, border: Border.all(color: Colors.blue.shade300), borderRadius: BorderRadius.circular(6)), child: Text(unitCtrl.text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blue), overflow: TextOverflow.ellipsis)),
+                      _LabelField(controller: it.namaCtrl, label: "unit", min: 52, max: 140, onChanged: (v) { unitCtrl.text = v; for (var x in satuanList) { if (!identical(x, it)) x.namaCtrl.text = v; } setSheet(() => refreshNominal(it)); }),
                       const SizedBox(width: 4),
                       SizedBox(width: 36, height: 36, child: InkWell(onTap: () => setSheet(() { it.op = it.op == "x" ? "÷" : "x"; it.nominalManual = false; refreshNominal(it); }), borderRadius: BorderRadius.circular(18), child: Container(decoration: BoxDecoration(color: it.op == "÷" ? Colors.teal.shade100 : Colors.orange.shade100, shape: BoxShape.circle, border: Border.all(color: Colors.grey.shade400)), child: Center(child: Text(it.op, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))))),
                       const SizedBox(width: 4),
                       _AutoField(controller: it.isiCtrl, hint: "isi", angka: true, min: 44, max: 90, onChanged: (v) => setSheet(() { it.nominalManual = false; refreshNominal(it); })),
                       const SizedBox(width: 4),
-                      _AutoField(controller: it.satuanBaruCtrl, hint: "unit", min: 52, max: 140, onChanged: (v) { tambahKeDaftarSatuan(v); setSheet(() => refreshNominal(it)); }),
+                      _LabelField(controller: it.satuanBaruCtrl, label: "satuan", min: 64, max: 140, onChanged: (v) { tambahKeDaftarSatuan(v); setSheet(() => refreshNominal(it)); }),
                       IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 30, minHeight: 30), tooltip: it.dasar ? "Dasar" : "Jadikan dasar", icon: Icon(it.dasar ? Icons.check_circle : Icons.radio_button_unchecked, color: it.dasar ? Colors.green : Colors.grey, size: 22), onPressed: () => setSheet(() { for (var x in satuanList) { x.dasar = false; } it.dasar = true; syncUnitDariDasar(); refreshSemuaNominal(); })),
                       IconButton(icon: const Icon(Icons.close, color: Colors.red, size: 16), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 26, minHeight: 26), onPressed: () => setSheet(() { if (satuanList.length > 1) { satuanList.removeAt(e.key); } })),
                     ]),
