@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import '../../core/formatter.dart';
 import 'po_provider.dart';
+import '../../core/po_database.dart';
 import 'parse_cepat.dart';
-
 
 class SatuanItem {
   SatuanItem({required String satuan, required this.dasar, required String qty, required String isi, required this.op, required String nominal, String satuanBaru = ''})
@@ -52,6 +52,79 @@ class HomeDaftarPO extends ConsumerStatefulWidget {
 }
 
 class _S extends ConsumerState<HomeDaftarPO> {
+  // ===== DRIFT: PO tersimpan + riwayat awet di SQLite, bukan cuma memori =====
+  late final PoDatabase _db;
+  bool _dbSiap = false;
+  @override
+  void initState() {
+    super.initState();
+    _db = PoDatabase();
+    _muatDariDrift();
+  }
+  @override
+  void dispose() {
+    _db.close();
+    super.dispose();
+  }
+  Future<void> _muatDariDrift() async {
+    try {
+      final pos = await _db.muatSemuaPo();
+      final riw = await _db.muatSemuaRiwayat();
+      if (!mounted) return;
+      setState(() {
+        // Gabung: yang sudah di DB + yang sempat tersimpan di memori sebelum load selesai.
+        final idsAda = daftarPO.map((e) => e["id"]).toSet();
+        for (final p in pos) {
+          if (!idsAda.contains(p["id"])) daftarPO.add(p);
+        }
+        final idsRiw = riwayatPO.map((e) => e["id"]).toSet();
+        for (final r in riw) {
+          if (!idsRiw.contains(r["id"])) riwayatPO.add(r);
+        }
+        // Nomor PO lanjut dari yang terbesar, biar tidak duplikat setelah restart.
+        var maks = 0;
+        for (final p in daftarPO) {
+          final n = int.tryParse("${p["nomor"]}".replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          if (n > maks) maks = n;
+        }
+        if (maks > 0) nomorPO = maks + 1;
+        _dbSiap = true;
+      });
+    } catch (_) {
+      // DB belum siap / pertama kali jalan: pakai memori dulu, simpan berikutnya tetap jalan.
+    }
+  }
+  // Tulis PO yang sedang dibuka (revisi / baru) ke Drift. Dipanggil habis simpan di CEK.
+  void _tulisPOAktifKeDrift() {
+    if (poRevisiIndex == null || poRevisiIndex! < 0 || poRevisiIndex! >= daftarPO.length) return;
+    final p = daftarPO[poRevisiIndex!];
+    final items = (p["items"] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final total = (p["total"] as num?)?.toDouble() ?? 0;
+    final id = p["id"];
+    if (id is int) {
+      _db.updatePo(id: id, tanggal: "${p["tanggal"]}", total: total, items: items);
+    } else {
+      _db.simpanPoBaru(nomor: "${p["nomor"]}", tanggal: "${p["tanggal"]}", total: total, items: items).then((idBaru) {
+        if (mounted) setState(() { p["id"] = idBaru; });
+      });
+    }
+  }
+  void _hapusPO(int i) {
+    if (i < 0 || i >= daftarPO.length) return;
+    final id = daftarPO[i]["id"];
+    if (id is int) _db.hapusPo(id);
+    setState(() {
+      final sedangRevisi = poRevisiIndex == i;
+      daftarPO.removeAt(i);
+      if (sedangRevisi) {
+        poRevisiIndex = null;
+        steps.clear();
+      } else if (poRevisiIndex != null && poRevisiIndex! > i) {
+        poRevisiIndex = poRevisiIndex! - 1;
+      }
+    });
+  }
+
   // ===== MESIN CASIO - STATE ASLI, BUKAN LAYAR SAJA =====
   // layar = angka yang sedang diketik / hasil terakhir (entry)
   // akumulator = angka pertama yang disimpan saat pencet operator (Casio: operand 1)
@@ -60,6 +133,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   // entryBaru = true berarti ketikan berikutnya ganti layar, bukan nempel
   // qtyHitung = angka SEBELUM operator (untuk M+ / PO). BUKAN hasil =.
   String layar = "0";
+  // operanSiap = layar BOLEH dipakai sbg operan kiri. false kalau layar cuma 0 sisa M+/ON/C/MC.
+  bool operanSiap = false;
   String ekspresi = "";
   double akumulator = 0;
   String opPending = "";
@@ -88,6 +163,12 @@ class _S extends ConsumerState<HomeDaftarPO> {
   int nomorPO = 1;
   String get nomorPOSeries => "PO B\u2022WC-${nomorPO.toString().padLeft(3, '0')}B\u2022I";
   double poTinggi = 300;
+  // ===== CEK = PO (bukan riwayat) + PO tersimpan + riwayat PO =====
+  String queryPO = "";
+  String queryRiwayat = "";
+  final List<Map<String, dynamic>> daftarPO = [];
+  final List<Map<String, dynamic>> riwayatPO = [];
+  int? poRevisiIndex;
   final List<Map<String, dynamic>> daftarBarang = [];
   String queryLS = "";
   final kodeCtrl = TextEditingController();
@@ -144,7 +225,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   // ===== BACKTICK LAYAR KALKULATOR =====
   // Penyebab layar polos: layar pakai formatHasil(), bukan formatRupiah(). formatHasil lama cuma toStringAsFixed(), tanpa grouping.
-
   String _stripBacktick(String s) => s.replaceAll('`', '').replaceAll('Rp', '').replaceAll(' ', '');
   double _parseLayar() => double.tryParse(_stripBacktick(layar)) ?? 0;
   String _groupBacktick(String s) {
@@ -157,8 +237,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (parts.length > 1) hasil = "$hasil.${parts[1]}";
     return neg ? "-$hasil" : hasil;
   }
-
-    String formatHasil(double v) {
+  String formatHasil(double v) {
     if (v.isNaN || v.isInfinite) {
       return "E";
     }
@@ -178,7 +257,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
     }
     return _groupBacktick(mentah);
   }
-
   double _pow10(int n) {
     double r = 1;
     for (int i = 0; i < n; i++) {
@@ -186,7 +264,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
     }
     return r;
   }
-
   String _buangNolBelakang(String s) {
     if (!s.contains('.')) {
       return s;
@@ -275,33 +352,86 @@ class _S extends ConsumerState<HomeDaftarPO> {
   void refreshSemuaNominal() { for (var s in satuanList) { refreshNominal(s); } }
 
   void bukaCek() {
+    // CEK = PO, BUKAN riwayat. Riwayat pindah ke tombol RIW / ikon riwayat di tiap step.
     showModalBottomSheet(context: context, isScrollControlled: true, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (ctx) => StatefulBuilder(builder: (ctx2, setSheet) => Padding(padding: EdgeInsets.only(left: 12, right: 12, top: 12, bottom: MediaQuery.of(ctx).viewInsets.bottom + 12),
-        child: SizedBox(height: 480, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("CEK - Riwayat Hitung (Casio)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx))]),
-          const SizedBox(height: 4),
-          const Text("CEK = riwayat, bukan PO. Edit 1 step di sini -> total CEK ikut berubah. PO / info satuan tidak berubah.", style: TextStyle(fontSize: 11, color: Colors.grey)),
-          const SizedBox(height: 6),
-          Container(width: double.infinity, padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8)), child: Text("TOTAL CEK = ${formatHasil(totalCek)}  |  GT = ${formatHasil(grandTotal)}  |  TAX = ${formatHasil(tarifPajak)}%", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
-          const SizedBox(height: 8),
-          if (steps.isEmpty) const Text("Belum ada step. Pencet = dulu."),
-          Expanded(child: ListView.builder(itemCount: steps.length, itemBuilder: (_, i) {
-            final st = steps[i];
-            final ctrl = TextEditingController(text: "${(st["jumlah"] as num?)?.toDouble() ?? 0}");
-            return Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text("${st["rumus"] ?? st["item"]}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Row(children: [
-                  Expanded(child: TextField(controller: ctrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Edit jumlah step ini", isDense: true, border: OutlineInputBorder()))),
-                  const SizedBox(width: 6),
-                  ElevatedButton(onPressed: () { final v = double.tryParse(ctrl.text) ?? 0; setSheet(() { _editStepCek(i, v); }); setState(() {}); }, child: const Text("SIMPAN")),
-                  IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 20), onPressed: () { setSheet(() { _hapusStepCek(i); }); setState(() {}); }),
-                ]),
-              ]));
-          })),
-        ])))),
-      );
+      builder: (ctx) => StatefulBuilder(builder: (ctx2, setSheet) {
+        final q = queryPO.toLowerCase();
+        final hasilCariPO = daftarPO.where((p) {
+          if (q.isEmpty) return true;
+          final items = (p["items"] as List);
+          final namaItems = items.map((e) => "${(e as Map)["item"]}").join(" ").toLowerCase();
+          return "${p["nomor"]}".toLowerCase().contains(q) || namaItems.contains(q) || "${p["tanggal"]}".toLowerCase().contains(q);
+        }).toList();
+        return Padding(padding: EdgeInsets.only(left: 12, right: 12, top: 12, bottom: MediaQuery.of(ctx).viewInsets.bottom + 12),
+          child: SizedBox(height: 580, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text("CEK - PO", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(12)), child: Text(nomorPOSeries, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
+              ]),
+              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+            ]),
+            const SizedBox(height: 8),
+            TextField(decoration: dec("🔎 Cari PO tersimpan — nomor / nama barang / tanggal..."), onChanged: (v) { setSheet(() { queryPO = v; }); setState(() { queryPO = v; }); }),
+            const SizedBox(height: 6),
+            if (daftarPO.isNotEmpty)
+              SizedBox(height: 40, child: ListView(scrollDirection: Axis.horizontal, children: [
+                const Padding(padding: EdgeInsets.only(right: 6, top: 10), child: Text("PO tersimpan:", style: TextStyle(fontSize: 11, color: Colors.grey))),
+                ...hasilCariPO.map((p) {
+                  final idx = daftarPO.indexOf(p);
+                  return Padding(padding: const EdgeInsets.only(right: 6), child: ActionChip(label: Text("${p["nomor"]}", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)), onPressed: () { Navigator.pop(ctx); _detailPO(idx); }));
+                }),
+              ])),
+            Container(width: double.infinity, padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8)), child: Text("TRACKING PO: TOTAL = ${formatHasil(totalCek)}  |  GT = ${formatHasil(grandTotal)}  |  TAX = ${formatHasil(tarifPajak)}%  |  STEP = ${steps.length}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
+            const SizedBox(height: 8),
+            if (steps.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text("Belum ada step. Pencet = atau M+ dulu, lalu edit di sini.")),
+            Expanded(child: ListView.builder(itemCount: steps.length, itemBuilder: (_, i) {
+              final st = steps[i];
+              final hargaC = TextEditingController(text: "${(st["harga"] as num?)?.toDouble() ?? 0}");
+              final qtyC = TextEditingController(text: "${(st["qty"] as num?)?.toDouble() ?? 0}");
+              final jumlahC = TextEditingController(text: "${(st["jumlah"] as num?)?.toDouble() ?? 0}");
+              return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  InkWell(onTap: () => _bukaPilihBarangUntukStep(i, setSheet), child: Row(children: [
+                    const Icon(Icons.edit, size: 14, color: Colors.blue),
+                    const SizedBox(width: 4),
+                    Expanded(child: Text("${i + 1}. ${st["item"]}", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                    const Text("tap ganti barang", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                  ])),
+                  const SizedBox(height: 2),
+                  Text("${st["rumus"] ?? ""}", style: const TextStyle(fontSize: 11, color: Colors.grey), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 6),
+                  Row(children: [
+                    Expanded(child: TextField(controller: hargaC, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Harga", isDense: true, border: OutlineInputBorder()))),
+                    const SizedBox(width: 6),
+                    Expanded(child: TextField(controller: qtyC, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Qty", isDense: true, border: OutlineInputBorder()))),
+                    const SizedBox(width: 6),
+                    Expanded(child: TextField(controller: jumlahC, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Jumlah", isDense: true, border: OutlineInputBorder()))),
+                  ]),
+                  const SizedBox(height: 6),
+                  Row(children: [
+                    Expanded(child: Text("Subtotal = ${formatRupiah(((st["jumlah"] as num?)?.toDouble() ?? 0).toInt())}", style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold))),
+                    IconButton(icon: const Icon(Icons.check_circle, color: Colors.green, size: 26), tooltip: "Simpan step ini", onPressed: () {
+                      final h = double.tryParse(hargaC.text) ?? 0;
+                      final q = double.tryParse(qtyC.text) ?? 0;
+                      final j = double.tryParse(jumlahC.text) ?? 0;
+                      setSheet(() { _simpanStepCEK(i, h, q, j); });
+                      setState(() {});
+                    }),
+                    IconButton(icon: const Icon(Icons.history, color: Colors.blue, size: 24), tooltip: "Riwayat PO", onPressed: () { _bukaRiwayat(); }),
+                  ]),
+                ]));
+            })),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: ElevatedButton.icon(icon: const Icon(Icons.save, size: 18), label: Text(poRevisiIndex != null ? "Simpan — Update ${daftarPO[poRevisiIndex!]["nomor"]}" : "Simpan PO — $nomorPOSeries"), onPressed: () { setSheet(() { _simpanPOdariCEK(); }); setState(() {}); })),
+              const SizedBox(width: 8),
+              TextButton(onPressed: () { setSheet(() { steps.clear(); poRevisiIndex = null; nomorPO++; layar = "0"; ekspresi = ""; }); setState(() {}); }, child: const Text("PO Baru")),
+            ]),
+          ])));
+      }),
+    );
   }
   void _inputAngka(String t) {
     if (adaError) { layar = "0"; ekspresi = ""; akumulator = 0; opPending = ""; op = ""; adaError = false; entryBaru = true; }
@@ -310,35 +440,49 @@ class _S extends ConsumerState<HomeDaftarPO> {
     else {
       if (t == "." && layar.contains(".")) return;
       if (layar.replaceAll("-", "").replaceAll(".", "").length >= 12) return; // Casio 12 digit, hitung digit saja, bukan `
-      if (layar == "0" && t != ".") { layar = t; } else { layar += t; }
+      if (layar == "0" && t != ".") { layar = t; }
+      else if (layar == "-0" && t != ".") { layar = "-$t"; }
+      else { layar += t; }
     }
     layar = _groupBacktick(layar); // langsung tampil 1`000 saat ketik, bukan nunggu =
+    operanSiap = true;
   }
   void _inputOperator(String t) {
     if (adaError) return;
     final cur = double.tryParse(_stripBacktick(layar)) ?? 0;
-    // FIX KEPENCET OPERATOR 2x: 1000 + lalu kepencet - -> cuma ganti operator, angka tetap 1000.
-    if (opPending.isNotEmpty && entryBaru) { opPending = t; op = t; ekspresi = "${formatHasil(akumulator)} $t"; entryBaru = true; return; }
-    // Casio chain: 2 + 3 + -> hitung 2+3 dulu, baru tunggu angka berikutnya
+    // ATURAN 1 — operator berulang (7 + - x): HANYA ganti operator, layar tetap, akumulator tidak dihitung ulang.
+    if (opPending.isNotEmpty && entryBaru) {
+      opPending = t; op = t;
+      ekspresi = "${formatHasil(akumulator)} $t";
+      entryBaru = true; operanSiap = false;
+      return;
+    }
+    // ATURAN 2 — operator tertunda + angka baru diketik: hitung dulu (Casio chain).
     if (opPending.isNotEmpty && !entryBaru) {
       final h = hitungDasar(akumulator, opPending, cur);
       if (h == null) { layar = "E"; adaError = true; return; }
       akumulator = h; angka1 = h; layar = formatHasil(h);
-    } else if (opPending.isEmpty) {
-      akumulator = cur; angka1 = cur;
-      // Simpan qty SEBELUM operator untuk M+ nanti. Ini kuncinya: 5 x 80000 -> qtyHitung=5, bukan 400000.
-      qtyHitung = cur; adaQtyHitung = true;
+      operanSiap = true;
+    }
+    // ATURAN 3 — belum ada operator: operan kiri dari layar HANYA kalau operanSiap. Kalau layar cuma 0 sisa M+/ON/C, akumulator dibiarkan.
+    else if (opPending.isEmpty) {
+      if (operanSiap) {
+        akumulator = cur; angka1 = cur;
+        qtyHitung = cur; adaQtyHitung = true;
+      }
     }
     opPending = t; op = t;
     ekspresi = "${formatHasil(akumulator)} $t";
-    entryBaru = true;
+    entryBaru = true; operanSiap = false;
   }
   void _inputSamaDengan() {
     if (adaError) return;
     final cur = double.tryParse(_stripBacktick(layar)) ?? 0;
     double a, b; String o;
     if (opPending.isNotEmpty) {
-      a = akumulator; b = cur; o = opPending;
+      a = akumulator;
+      b = entryBaru ? akumulator : cur; // 7 + = -> 14 (Casio). Jangan pakai layar yg bisa 0 sisa M+/ON/C.
+      o = opPending;
       lastOp = o; lastAngka2 = b;
       // qtyHitung sudah disimpan saat pencet operator (angka pertama)
     } else if (lastOp.isNotEmpty) {
@@ -353,7 +497,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     grandTotal += h;
     akumulator = h; angka1 = h; layar = formatHasil(h);
     opPending = ""; op = "";
-    entryBaru = true;
+    entryBaru = true; operanSiap = true;
     // qtyHitung TETAP angka pertama, jangan ditimpa hasil. Inilah fix qty jadi subtotal.
   }
   void _inputPersen() {
@@ -368,13 +512,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
     else { h = cur / 100; }
     ekspresi = opPending.isEmpty ? "$cur% = ${formatHasil(h)}" : "${formatHasil(akumulator)} $opPending $cur% = ${formatHasil(h)}";
     steps.add({"item": ekspresi, "rumus": ekspresi, "harga": akumulator, "qty": cur, "jumlah": h});
-    layar = formatHasil(h); akumulator = h; angka1 = h; opPending = ""; op = ""; entryBaru = true;
+    layar = formatHasil(h); akumulator = h; angka1 = h; opPending = ""; op = ""; entryBaru = true; operanSiap = true;
   }
   // ===== TAX / CSM / ADD2 / ROUND — BARU, LACI TERPISAH =====
   double _angkaLayar() => _parseLayar();
-  void _pencetTaxPlus() { final v = _angkaLayar(); final pajak = v * tarifPajak / 100; layar = formatHasil(v + pajak); ekspresi = "${formatHasil(v)} TAX+ $tarifPajak% = ${formatHasil(v + pajak)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": v + pajak}); entryBaru = true; }
-  void _pencetTaxMin() { final v = _angkaLayar(); final bersih = v / (1 + tarifPajak / 100); layar = formatHasil(bersih); ekspresi = "${formatHasil(v)} TAX- $tarifPajak% = ${formatHasil(bersih)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": bersih}); entryBaru = true; }
-  void _setTax() { final v = _angkaLayar(); if (v >= 0 && v <= 100) { tarifPajak = v; ekspresi = "SET TAX = ${formatHasil(v)}%"; layar = formatHasil(v); entryBaru = true; } }
+  void _pencetTaxPlus() { final v = _angkaLayar(); final pajak = v * tarifPajak / 100; layar = formatHasil(v + pajak); ekspresi = "${formatHasil(v)} TAX+ $tarifPajak% = ${formatHasil(v + pajak)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": v + pajak}); entryBaru = true; opPending = ""; op = ""; operanSiap = true; }
+  void _pencetTaxMin() { final v = _angkaLayar(); final bersih = v / (1 + tarifPajak / 100); layar = formatHasil(bersih); ekspresi = "${formatHasil(v)} TAX- $tarifPajak% = ${formatHasil(bersih)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": bersih}); entryBaru = true; opPending = ""; op = ""; operanSiap = true; }
+  void _setTax() { final v = _angkaLayar(); if (v >= 0 && v <= 100) { tarifPajak = v; ekspresi = "SET TAX = ${formatHasil(v)}%"; layar = formatHasil(v); entryBaru = true; opPending = ""; op = ""; operanSiap = true; } }
   void _pencetCost() { laciCost = _angkaLayar(); ekspresi = "COST = ${formatHasil(laciCost)}"; entryBaru = true; _hitungCSM(); }
   void _pencetSell() { laciSell = _angkaLayar(); ekspresi = "SELL = ${formatHasil(laciSell)}"; entryBaru = true; _hitungCSM(); }
   void _pencetMargin() { final v = _angkaLayar(); if (v > 0 && v < 100) { laciMargin = v; ekspresi = "MARGIN = ${formatHasil(v)}%"; entryBaru = true; _hitungCSM(); } }
@@ -383,28 +527,226 @@ class _S extends ConsumerState<HomeDaftarPO> {
     else if (laciSell > 0 && laciMargin > 0 && laciMargin < 100 && laciCost == 0) { laciCost = laciSell * (1 - laciMargin / 100); layar = formatHasil(laciCost); ekspresi = "COST = SELL x (1 - MARGIN) = ${formatHasil(laciCost)}"; }
     else if (laciCost > 0 && laciSell > 0 && laciSell != laciCost) { laciMargin = (laciSell - laciCost) / laciSell * 100; layar = formatHasil(laciMargin); ekspresi = "MARGIN = (SELL - COST) / SELL = ${formatHasil(laciMargin)}%"; }
     if (laciCost > 0 || laciSell > 0 || laciMargin > 0) steps.add({"item": ekspresi, "rumus": ekspresi, "harga": laciCost, "qty": laciMargin, "jumlah": laciSell});
+    opPending = ""; op = ""; operanSiap = true;
   }
   void _resetCSM() { laciCost = 0; laciSell = 0; laciMargin = 0; ekspresi = "COST / SELL / MARGIN direset"; }
   void _gantiRound() { modeRound = modeRound == "5/4" ? "CUT" : modeRound == "CUT" ? "F" : "5/4"; ekspresi = "ROUND = $modeRound"; layar = formatHasil(_angkaLayar()); }
   void _gantiAdd2() { modeAdd2 = !modeAdd2; ekspresi = modeAdd2 ? "ADD2 ON: ketik 123 -> 1.23" : "ADD2 OFF"; }
   double _terapkanAdd2(double v) => modeAdd2 ? v / 100 : v;
   double get totalCek { double t = 0; for (final s in steps) { t += (s["jumlah"] as num?)?.toDouble() ?? 0; } return t; }
-  void _editStepCek(int i, double jumlahBaru) { if (i < 0 || i >= steps.length) return; steps[i]["jumlah"] = jumlahBaru; steps[i]["rumus"] = "${steps[i]["rumus"]} -> ${formatHasil(jumlahBaru)}"; layar = formatHasil(totalCek); ekspresi = "CEK total = ${formatHasil(totalCek)}"; }
-  void _hapusStepCek(int i) { if (i < 0 || i >= steps.length) return; steps.removeAt(i); layar = formatHasil(totalCek); ekspresi = "CEK total = ${formatHasil(totalCek)}"; }
+  // ===== CEK = PO: step bisa diedit penuh (nama barang, harga, qty, jumlah). Hapus per-step diganti Riwayat. =====
+  void _simpanStepCEK(int i, double harga, double qty, double jumlah) {
+    if (i < 0 || i >= steps.length) return;
+    final hargaLama = (steps[i]["harga"] as num?)?.toDouble() ?? 0;
+    final qtyLama = (steps[i]["qty"] as num?)?.toDouble() ?? 0;
+    final jumlahBaru = (harga != hargaLama || qty != qtyLama) ? harga * qty : jumlah;
+    steps[i]["harga"] = harga;
+    steps[i]["qty"] = qty;
+    steps[i]["jumlah"] = jumlahBaru;
+    final nama = "${steps[i]["item"]}";
+    if (nama.contains(" = ")) {
+      steps[i]["rumus"] = "$nama -> ${formatHasil(jumlahBaru)}";
+    } else {
+      steps[i]["rumus"] = "$nama : ${formatHasil(qty)} x ${formatRupiah(harga.toInt())} = ${formatRupiah(jumlahBaru.toInt())}";
+    }
+    layar = formatHasil(totalCek);
+    ekspresi = "CEK PO $nomorPOSeries = ${formatHasil(totalCek)}";
+  }
+  void _bukaPilihBarangUntukStep(int i, void Function(void Function()) setSheet) {
+    if (daftarBarang.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Belum ada barang — tambah dulu via LS.")));
+      return;
+    }
+    showModalBottomSheet(context: context, builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      const Padding(padding: EdgeInsets.all(12), child: Text("Tap barang untuk ganti nama step ini", style: TextStyle(fontWeight: FontWeight.bold))),
+      SizedBox(height: 320, child: ListView.builder(itemCount: daftarBarang.length, itemBuilder: (_, j) {
+        final b = daftarBarang[j];
+        return ListTile(
+          title: Text("${b["nama"]}"),
+          subtitle: Text("${b["kode"]} • ${formatRupiah(int.tryParse("${b["harga1"]}") ?? 0)}"),
+          onTap: () {
+            final hargaBaru = double.tryParse("${b["harga1"]}") ?? 0;
+            final qtyLama = (steps[i]["qty"] as num?)?.toDouble() ?? 1;
+            setState(() {
+              steps[i]["item"] = "${b["nama"]}";
+              steps[i]["harga"] = hargaBaru;
+              steps[i]["jumlah"] = hargaBaru * qtyLama;
+              steps[i]["rumus"] = "${b["nama"]} : ${formatHasil(qtyLama)} x ${formatRupiah(hargaBaru.toInt())} = ${formatRupiah((hargaBaru * qtyLama).toInt())}";
+              layar = formatHasil(totalCek);
+              ekspresi = "CEK PO $nomorPOSeries = ${formatHasil(totalCek)}";
+            });
+            Navigator.pop(ctx);
+            setSheet(() {});
+          },
+        );
+      })),
+    ])));
+  }
+  void _tambahRiwayat(String nomor, String aksi, double total, String ringkasan) {
+    final skrg = DateTime.now();
+    final tgl = "${skrg.day.toString().padLeft(2, '0')}/${skrg.month.toString().padLeft(2, '0')} ${skrg.hour.toString().padLeft(2, '0')}:${skrg.minute.toString().padLeft(2, '0')}";
+    final entry = {"nomor": nomor, "tanggal": tgl, "aksi": aksi, "total": total, "ringkasan": ringkasan};
+    riwayatPO.insert(0, entry);
+    _db.tambahRiwayat(nomor: nomor, tanggal: tgl, aksi: aksi, total: total, ringkasan: ringkasan).then((id) {
+      if (mounted) setState(() { entry["id"] = id; });
+    });
+  }
+  void _simpanPOdariCEK() {
+    if (steps.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("CEK masih kosong — hitung dulu / M+ dulu.")));
+      return;
+    }
+    final salinan = steps.map((e) => Map<String, dynamic>.from(e)).toList();
+    final total = totalCek;
+    final skrg = DateTime.now();
+    final tgl = "${skrg.day.toString().padLeft(2, '0')}/${skrg.month.toString().padLeft(2, '0')} ${skrg.hour.toString().padLeft(2, '0')}:${skrg.minute.toString().padLeft(2, '0')}";
+    final ringkasan = salinan.map((e) => "${e["item"]}").join(", ");
+    if (poRevisiIndex != null && poRevisiIndex! >= 0 && poRevisiIndex! < daftarPO.length) {
+      daftarPO[poRevisiIndex!] = {...daftarPO[poRevisiIndex!], "items": salinan, "total": total, "tanggal": tgl};
+      _tambahRiwayat("${daftarPO[poRevisiIndex!]["nomor"]}", "Revisi", total, ringkasan);
+    } else {
+      final nomor = nomorPOSeries;
+      daftarPO.add({"nomor": nomor, "tanggal": tgl, "items": salinan, "total": total});
+      poRevisiIndex = daftarPO.length - 1;
+      _tambahRiwayat(nomor, "Simpan", total, ringkasan);
+    }
+    _tulisPOAktifKeDrift();
+    layar = formatHasil(total);
+    ekspresi = "PO ${daftarPO[poRevisiIndex!]["nomor"]} tersimpan = ${formatHasil(total)}";
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("PO ${daftarPO[poRevisiIndex!]["nomor"]} tersimpan / ter-update dari CEK.")));
+  }
+  void _muatPOkeCEK(int i) {
+    if (i < 0 || i >= daftarPO.length) return;
+    final p = daftarPO[i];
+    steps.clear();
+    for (final e in (p["items"] as List)) {
+      steps.add(Map<String, dynamic>.from(e as Map));
+    }
+    poRevisiIndex = i;
+    nomorPO = int.tryParse("${p["nomor"]}".replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
+    layar = formatHasil(totalCek);
+    ekspresi = "PO ${p["nomor"]} dimuat untuk revisi";
+  }
+  void _detailPO(int i) {
+    if (i < 0 || i >= daftarPO.length) return;
+    final p = daftarPO[i];
+    final items = (p["items"] as List);
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: Text("${p["nomor"]}"),
+      content: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text("Tanggal: ${p["tanggal"]}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 8),
+        ...items.map((e) {
+          final m = Map<String, dynamic>.from(e as Map);
+          return Padding(padding: const EdgeInsets.only(bottom: 6), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text("${m["item"]}", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            Text("${formatHasil((m["qty"] as num?)?.toDouble() ?? 0)} x ${formatRupiah(((m["harga"] as num?)?.toDouble() ?? 0).toInt())} = ${formatRupiah(((m["jumlah"] as num?)?.toDouble() ?? 0).toInt())}", style: const TextStyle(fontSize: 12)),
+          ]));
+        }),
+        const Divider(),
+        Text("TOTAL = ${formatRupiah(((p["total"] as num?)?.toDouble() ?? 0).toInt())}", style: const TextStyle(fontWeight: FontWeight.bold)),
+      ])),
+      actions: [
+        TextButton(onPressed: () { Navigator.pop(ctx); _hapusPO(i); }, child: const Text("HAPUS PO", style: TextStyle(color: Colors.red))),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("TUTUP")),
+        ElevatedButton(onPressed: () {
+          Navigator.pop(ctx);
+          setState(() { _muatPOkeCEK(i); });
+          bukaCek();
+        }, child: const Text("REVISI PO INI")),
+      ],
+    ));
+  }
+  void _bukaRiwayat() {
+    showModalBottomSheet(context: context, isScrollControlled: true, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => StatefulBuilder(builder: (ctx2, setSheet) {
+        final q = queryRiwayat.toLowerCase();
+        final hasil = riwayatPO.where((r) {
+          if (q.isEmpty) return true;
+          return "${r["nomor"]}".toLowerCase().contains(q) || "${r["aksi"]}".toLowerCase().contains(q) || "${r["tanggal"]}".toLowerCase().contains(q) || "${r["ringkasan"]}".toLowerCase().contains(q);
+        }).toList();
+        return Padding(padding: EdgeInsets.only(left: 12, right: 12, top: 12, bottom: MediaQuery.of(ctx).viewInsets.bottom + 12),
+          child: SizedBox(height: 520, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text("Riwayat PO", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Row(children: [
+                TextButton.icon(icon: const Icon(Icons.delete_sweep, size: 18), label: const Text("Hapus Semua"), onPressed: () { _db.hapusSemuaRiwayat(); setSheet(() { riwayatPO.clear(); }); setState(() {}); }),
+                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+              ]),
+            ]),
+            const SizedBox(height: 6),
+            TextField(decoration: dec("🔍 Cari riwayat — nomor / aksi / tanggal / barang..."), onChanged: (v) { setSheet(() { queryRiwayat = v; }); setState(() { queryRiwayat = v; }); }),
+            const SizedBox(height: 8),
+            Expanded(child: hasil.isEmpty ? const Center(child: Text("Belum ada riwayat. Simpan PO dari CEK dulu.")) : ListView.builder(itemCount: hasil.length, itemBuilder: (_, j) {
+              final r = hasil[j];
+              return Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.all(10), decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+                child: Row(children: [
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text("${r["nomor"]} • ${r["aksi"]}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text("${r["tanggal"]} • Total ${formatRupiah(((r["total"] as num?)?.toDouble() ?? 0).toInt())}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                    Text("${r["ringkasan"]}", style: const TextStyle(fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ])),
+                  IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), tooltip: "Hapus 1 riwayat ini", onPressed: () { final id = r["id"]; if (id is int) _db.hapusRiwayat(id); setSheet(() { riwayatPO.remove(r); }); setState(() {}); }),
+                ]));
+            })),
+          ])));
+      }),
+    );
+  }
+  void _bukaCariPO() {
+    showModalBottomSheet(context: context, isScrollControlled: true, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => StatefulBuilder(builder: (ctx2, setSheet) {
+        final q = queryPO.toLowerCase();
+        final hasil = daftarPO.where((p) {
+          if (q.isEmpty) return true;
+          final items = (p["items"] as List);
+          final namaItems = items.map((e) => "${(e as Map)["item"]}").join(" ").toLowerCase();
+          return "${p["nomor"]}".toLowerCase().contains(q) || namaItems.contains(q) || "${p["tanggal"]}".toLowerCase().contains(q);
+        }).toList();
+        return Padding(padding: EdgeInsets.only(left: 12, right: 12, top: 12, bottom: MediaQuery.of(ctx).viewInsets.bottom + 12),
+          child: SizedBox(height: 520, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text("PO — Cari PO Tersimpan", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+            ]),
+            const SizedBox(height: 6),
+            TextField(decoration: dec("🔎 Cari PO — nomor / nama barang / tanggal..."), onChanged: (v) { setSheet(() { queryPO = v; }); setState(() { queryPO = v; }); }),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: Text("PO aktif (M+): ${ref.watch(poProvider).items.length} item", style: const TextStyle(fontSize: 12, color: Colors.grey))),
+              TextButton(onPressed: () { Navigator.pop(ctx); setState(() { poTerbuka = true; }); }, child: const Text("Buka Panel PO")),
+            ]),
+            const Divider(),
+            Expanded(child: hasil.isEmpty ? Center(child: Text(_dbSiap ? "Belum ada PO tersimpan.\nHitung di CEK lalu Simpan PO." : "Memuat PO tersimpan...", textAlign: TextAlign.center)) : ListView.builder(itemCount: hasil.length, itemBuilder: (_, j) {
+              final p = hasil[j];
+              final idx = daftarPO.indexOf(p);
+              final items = (p["items"] as List);
+              return InkWell(onTap: () { Navigator.pop(ctx); _detailPO(idx); },
+                child: Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.all(10), decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text("${p["nomor"]}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text("${p["tanggal"]} • ${items.length} step • Total ${formatRupiah(((p["total"] as num?)?.toDouble() ?? 0).toInt())}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                    Text(items.map((e) => "${(e as Map)["item"]}").join(" | "), style: const TextStyle(fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ])));
+            })),
+          ])));
+      }),
+    );
+  }
 
   void pencet(String t) {
     HapticFeedback.lightImpact();
     setState(() {
       if (t == "AC") {
         // Casio AC: hapus SEMUA - layar, akumulator, operator, ekspresi, error
-        layar = "0"; ekspresi = ""; akumulator = 0; angka1 = 0; opPending = ""; op = ""; entryBaru = true; adaError = false; lastOp = ""; lastAngka2 = 0; adaQtyHitung = false; qtyHitung = 1;
+        layar = "0"; ekspresi = ""; akumulator = 0; angka1 = 0; opPending = ""; op = ""; entryBaru = true; adaError = false; lastOp = ""; lastAngka2 = 0; adaQtyHitung = false; qtyHitung = 1; operanSiap = false;
       }
       else if (t == "ON/C") {
         // Casio ON/C: hapus entry saja, akumulator + operator tetap
-        layar = "0"; entryBaru = true; adaError = false;
+        layar = "0"; entryBaru = true; adaError = false; operanSiap = false;
       }
-      else if (t == "OFF") { layar = "0"; ekspresi = ""; entryBaru = true; }
-      else if (t == "PO") { poTerbuka = true; }
+      else if (t == "OFF") { layar = "0"; ekspresi = ""; akumulator = 0; angka1 = 0; opPending = ""; op = ""; entryBaru = true; adaError = false; operanSiap = false; }
+      else if (t == "PO") { _bukaCariPO(); }
       else if (t == "LS") { bukaListLS(); }
       else if (t == "CEK") { bukaCek(); }
       else if (t == "TAX+") { _pencetTaxPlus(); }
@@ -416,11 +758,11 @@ class _S extends ConsumerState<HomeDaftarPO> {
       else if (t == "CSM CLR") { _resetCSM(); }
       else if (t == "ROUND") { _gantiRound(); }
       else if (t == "ADD2") { _gantiAdd2(); }
-      else if (t == "GT") { layar = formatHasil(grandTotal); ekspresi = "GT = ${formatHasil(grandTotal)}"; entryBaru = true; }
+      else if (t == "GT") { layar = formatHasil(grandTotal); ekspresi = "GT = ${formatHasil(grandTotal)}"; entryBaru = true; operanSiap = true; }
       else if (t == "BEP") {
         if (hargaAcuan > 0) { layar = formatHasil(hargaAcuan * 1.1); ekspresi = "BEP = Acuan x 110%"; }
         else { layar = formatHasil((double.tryParse(_stripBacktick(layar)) ?? 0) + 120); }
-        entryBaru = true;
+        entryBaru = true; operanSiap = true;
       }
       else if (t == "M+") {
         // FIX BIRU - QTY BUKAN LAYAR / HASIL:
@@ -450,29 +792,32 @@ class _S extends ConsumerState<HomeDaftarPO> {
           if (it != null) { ref.read(poProvider.notifier).tambahItem(it); }
           steps.add({"item": "${barangDipilih!["nama"]} : $qtyAman x ${formatRupiah(harga)} = ${formatRupiah(jumlah)}", "rumus": "${barangDipilih!["nama"]} : $qtyAman x ${formatRupiah(harga)} = ${formatRupiah(jumlah)}", "harga": harga, "qty": qtyAman, "jumlah": jumlah});
         }
-        layar = "0"; entryBaru = true; adaQtyHitung = false;
+        layar = "0"; entryBaru = true; adaQtyHitung = false; operanSiap = false;
       }
-      else if (t == "M-") { memori -= double.tryParse(_stripBacktick(layar)) ?? 0; layar = "0"; entryBaru = true; }
-      else if (t == "MRC") { layar = formatHasil(memori); memori = 0; entryBaru = true; }
-      else if (t == "MR") { layar = formatHasil(memori); entryBaru = true; }
-      else if (t == "MC") { memori = 0; layar = "0"; entryBaru = true; }
+      else if (t == "M-") { memori -= double.tryParse(_stripBacktick(layar)) ?? 0; layar = "0"; entryBaru = true; operanSiap = false; }
+      else if (t == "MRC") { layar = formatHasil(memori); memori = 0; entryBaru = true; operanSiap = true; }
+      else if (t == "MR") { layar = formatHasil(memori); entryBaru = true; operanSiap = true; }
+      else if (t == "MC") { memori = 0; layar = "0"; entryBaru = true; operanSiap = false; }
       else if (t == "MU") {
         // Casio MU (Mark-Up): Harga modal 100, MU 20 -> Harga jual = 100 / (1 - 20%) = 125
         // Di sini: layar = modal, MU = +10% BEP cepat. Pakai rumus MU beneran dengan 10%:
         final modal = double.tryParse(_stripBacktick(layar)) ?? 0;
         final jual = modal / (1 - 0.10);
         ekspresi = "MU 10% dari ${formatHasil(modal)}";
-        layar = formatHasil(jual); entryBaru = true;
+        layar = formatHasil(jual); entryBaru = true; opPending = ""; op = ""; operanSiap = true;
       }
-      else if (t == "▶" || t == "⌫") {
-        if (adaError) { layar = "0"; adaError = false; entryBaru = true; }
+      else if (t == "RIW") { _bukaRiwayat(); }
+      else if (t == "⌫") {
+        if (adaError) { layar = "0"; adaError = false; entryBaru = true; operanSiap = false; }
         else if (!entryBaru) { if (layar.length > 1) { layar = _groupBacktick(_stripBacktick(layar).substring(0, _stripBacktick(layar).length - 1)); if (layar.isEmpty || layar == "-") layar = "0"; } else { layar = "0"; } }
       }
       else if (["+", "-", "x", "÷", "/"].contains(t)) { _inputOperator(t); }
       else if (t == "=") { if (modeAdd2 && opPending.isEmpty) { layar = formatHasil(_terapkanAdd2(_angkaLayar())); } _inputSamaDengan(); }
       else if (t == "+/-") {
         if (adaError) return;
-        if (layar.startsWith("-")) { layar = layar.substring(1); } else if (layar != "0") { layar = "-$layar"; }
+        // Habis operator (7 +) layar masih 7. +/- di sini = mulai entry negatif (-0), BUKAN mengubah 7 jadi -7 (itu bikin 7 + (-7) = 0).
+        if (entryBaru && !operanSiap) { layar = "-0"; entryBaru = false; operanSiap = true; }
+        else if (layar.startsWith("-")) { layar = layar.substring(1); } else if (layar != "0") { layar = "-$layar"; }
       }
       else if (t == "%") { _inputPersen(); }
       else if (t == "GT") { layar = formatHasil(grandTotal); entryBaru = true; }
@@ -543,7 +888,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32), icon: const Icon(Icons.edit, size: 18, color: Colors.blue), tooltip: "Edit barang", onPressed: () { _dialogEditBarangLS(b, idxAsli); }),
                           IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32), icon: const Icon(Icons.delete, size: 18, color: Colors.red), tooltip: "Hapus barang", onPressed: () { setState(() { if (idxAsli >= 0) { daftarBarang.removeAt(idxAsli); } if (barangDipilih != null && barangDipilih!["kode"].toString() == b["kode"].toString()) { barangDipilih = null; } }); setSheet(() {}); }),
                         ]),
-                        if (satuanBarang.isNotEmpty) ...[const SizedBox(height: 6), Wrap(spacing: 4, runSpacing: 4, children: satuanBarang.map<Widget>((x) { final m = Map<String, dynamic>.from(x as Map); final nom = double.tryParse(m["nominal"].toString()) ?? 0; final labelSatuan = (m["satuanBaru"]?.toString().isNotEmpty == true) ? m["satuanBaru"].toString() : m["satuan"].toString(); return ActionChip(label: Text("$labelSatuan - ${formatRupiah(nom.toInt())}", style: const TextStyle(fontSize: 10)), onPressed: () { setState(() { barangDipilih = {"kode": b["kode"].toString(), "nama": b["nama"].toString(), "kategori": b["kategori"].toString(), "harga1": nom.toInt().toString()}; layar = nom.toStringAsFixed(0); entryBaru = true; }); Navigator.pop(ctx); }); }).toList())],
+                        if (satuanBarang.isNotEmpty) ...[const SizedBox(height: 6), Wrap(spacing: 4, runSpacing: 4, children: satuanBarang.map<Widget>((x) { final m = Map<String, dynamic>.from(x as Map); final nom = double.tryParse(m["nominal"].toString()) ?? 0; final labelSatuan = (m["satuanBaru"]?.toString().isNotEmpty == true) ? m["satuanBaru"].toString() : m["satuan"].toString(); return ActionChip(label: Text("$labelSatuan - ${formatRupiah(nom.toInt())}", style: const TextStyle(fontSize: 10)), onPressed: () { setState(() { barangDipilih = {"kode": b["kode"].toString(), "nama": b["nama"].toString(), "kategori": b["kategori"].toString(), "harga1": nom.toInt().toString()}; layar = nom.toStringAsFixed(0); entryBaru = true; operanSiap = true; }); Navigator.pop(ctx); }); }).toList())],
                       ]),
                     ),
                   );
@@ -723,7 +1068,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(10, 18, 10, 10),
             child: Column(children: [
               Expanded(child: Row(children: [tombol("AC", bg: Colors.blue.shade400, fg: Colors.white), tombol("MRC", bg: Colors.grey.shade400), tombol("M-", bg: Colors.grey.shade400), tombol("M+", bg: Colors.green, fg: Colors.white, besar: true), tombol("LS", bg: Colors.orange.shade100, besar: true), tombol("CEK", bg: Colors.black, fg: Colors.white), tombol("BEP", bg: Colors.pink, fg: Colors.white)])),
-              Expanded(child: Row(children: [tombol("OFF", bg: Colors.blue.shade400, fg: Colors.white), tombol("7"), tombol("8"), tombol("9"), tombol("▶", bg: Colors.grey.shade300), tombol("MU", bg: Colors.grey.shade300), tombol("MC", bg: Colors.grey.shade300)])),
+              Expanded(child: Row(children: [tombol("OFF", bg: Colors.blue.shade400, fg: Colors.white), tombol("7"), tombol("8"), tombol("9"), tombol("RIW", bg: Colors.grey.shade300), tombol("MU", bg: Colors.grey.shade300), tombol("MC", bg: Colors.grey.shade300)])),
               Expanded(child: Row(children: [tombol("%", bg: Colors.grey.shade300), tombol("4"), tombol("5"), tombol("6"), tombol("-", bg: Colors.grey.shade300), tombol("÷", bg: Colors.grey.shade300), tombol("MR", bg: Colors.grey.shade300)])),
               Expanded(child: Row(children: [tombol("+/-", bg: Colors.grey.shade300), tombol("1"), tombol("2"), tombol("3"), tombol("+", bg: Colors.grey.shade300), tombol("x", bg: Colors.grey.shade300), tombol("PO", bg: Colors.teal, fg: Colors.white)])),
               Expanded(child: Row(children: [tombol("ON/C", bg: Colors.blue.shade400, fg: Colors.white), tombol("0"), tombol("00"), tombol("."), tombol("=", bg: Colors.blue, fg: Colors.white, besar: true), tombol("M+", bg: Colors.green, fg: Colors.white), tombol("⌫", bg: Colors.grey.shade300)])),
