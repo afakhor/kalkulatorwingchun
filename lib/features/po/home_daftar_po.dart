@@ -494,13 +494,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   // ===== CPS — Copas Teks jadi Step =====
   // Tempel teks WA/chat -> tiap baris jadi 1 step CEK (masih bisa diedit di CPS, di CEK, sebelum Simpan PO).
-  // Nama dicocokkan ke list LS: 1) alias yang pernah dipilih manual, 2) nama mengandung (bukan harus sama persis).
+  // Nama dicocokkan ke list LS: alias yang pernah dipilih manual dulu, lalu nama mengandung (bukan harus sama persis).
   void _bukaCPS() {
     final tempelC = TextEditingController();
     List<Map<String, dynamic>> baris = [];
 
     // Rapikan angka: titik ribuan dibuang ("50.000" -> "50000"), koma desimal aman ("2,5").
-    String _rapikanAngka(String teks) {
+    String rapikanAngka(String teks) {
       final buf = StringBuffer();
       for (var i = 0; i < teks.length; i++) {
         final c = teks[i];
@@ -518,8 +518,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
       return buf.toString();
     }
 
-    // Cari barang di list LS: 1) alias yang pernah dipilih manual, 2) nama mengandung (bukan harus sama persis).
-    Map<String, dynamic>? _cocokMaster(String nama) {
+    // Cari barang di list LS: alias yang pernah dipilih manual dulu, lalu nama mengandung (bukan harus sama persis).
+    Map<String, dynamic>? cocokMaster(String nama) {
       final kunci = _normalNama(nama);
       if (kunci.isEmpty) return null;
       final kodeAlias = aliasCopas[kunci];
@@ -537,8 +537,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
     }
 
     // 1 baris teks -> {nama, qty, harga, cocok, controller...}.
-    Map<String, dynamic> _parseSatu(String mentah) {
-      final teks = _rapikanAngka(mentah.replaceAll('`', '').replaceAll(RegExp(r'[Rr][Pp]\s*'), ''));
+    Map<String, dynamic> parseSatu(String mentah) {
+      final teks = rapikanAngka(mentah.replaceAll('`', '').replaceAll(RegExp(r'[Rr][Pp]\s*'), ''));
       final nums = RegExp(r'[0-9]+(?:[.,][0-9]+)?')
           .allMatches(teks)
           .map((m) => double.tryParse(m.group(0)!.replaceAll(',', '.')) ?? 0)
@@ -549,7 +549,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           .replaceAll(RegExp(r'\s+'), ' ')
           .trim();
       if (nama.isEmpty) nama = "Barang";
-      final cocok = _cocokMaster(nama);
+      final cocok = cocokMaster(nama);
       double qty;
       double harga;
       if (nums.length >= 2) {
@@ -571,7 +571,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     }
 
     // Pilih barang dari list LS untuk 1 baris (ganti yang cocok). Pilihan ini diingat sebagai alias.
-    void _pilihMaster(Map<String, dynamic> r, void Function(void Function()) setSheet) {
+    void pilihMaster(Map<String, dynamic> r, void Function(void Function()) setSheet) {
       showModalBottomSheet(
         context: context,
         builder: (ctx2) => SafeArea(
@@ -635,7 +635,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                 label: const Text("Urai jadi Baris"),
                 onPressed: () {
                   setSheet(() {
-                    baris = tempelC.text.split('\n').where((l) => l.trim().isNotEmpty).map((l) => _parseSatu(l)).toList();
+                    baris = tempelC.text.split('\n').where((l) => l.trim().isNotEmpty).map((l) => parseSatu(l)).toList();
                   });
                 },
               )),
@@ -664,9 +664,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
                         const SizedBox(height: 6),
                         Wrap(spacing: 6, children: [
                           if (cocok != null)
-                            ActionChip(label: Text("Cocok: ${cocok["nama"]} — ${formatRupiah(int.tryParse("${cocok["harga1"]}") ?? 0)}", style: const TextStyle(fontSize: 11)), onPressed: () => _pilihMaster(r, setSheet))
+                            ActionChip(label: Text("Cocok: ${cocok["nama"]} — ${formatRupiah(int.tryParse("${cocok["harga1"]}") ?? 0)}", style: const TextStyle(fontSize: 11)), onPressed: () => pilihMaster(r, setSheet))
                           else
-                            ActionChip(label: const Text("Barang baru — tap pilih dari list LS", style: TextStyle(fontSize: 11)), onPressed: () => _pilihMaster(r, setSheet)),
+                            ActionChip(label: const Text("Barang baru — tap pilih dari list LS", style: TextStyle(fontSize: 11)), onPressed: () => pilihMaster(r, setSheet)),
                         ]),
                         const SizedBox(height: 4),
                         Text("Subtotal = ${formatRupiah((((r["qty"] as num?)?.toDouble() ?? 0) * ((r["harga"] as num?)?.toDouble() ?? 0)).toInt())}", style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
