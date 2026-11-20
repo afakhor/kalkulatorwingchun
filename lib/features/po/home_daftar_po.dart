@@ -695,8 +695,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                 bukaCek();
               },
             )),
-          ]))),
-        ;
+          ])));
       }),
     );
   }
