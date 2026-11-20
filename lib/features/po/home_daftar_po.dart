@@ -72,6 +72,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       final pos = await _db.muatSemuaPo();
       final log = await _db.muatLogStep();
       final pel = await _db.muatPelanggan();
+      final alias = await _db.muatAliasCopas();
       if (!mounted) return;
       setState(() {
         final idsAda = daftarPO.map((e) => e["id"]).toSet();
@@ -83,6 +84,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           if (!idsRiw.contains(r["id"])) riwayatPO.add(r);
         }
         cachePelanggan = pel;
+        aliasCopas = alias;
         var maks = 0;
         for (final p in daftarPO) {
           final n = int.tryParse("${p["nomor"]}".replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
@@ -174,6 +176,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   // ===== Pelanggan (cache nama untuk autocomplete) =====
   final pelangganCtrl = TextEditingController();
   List<String> cachePelanggan = [];
+  Map<String, String> aliasCopas = {}; // nama copasan -> kode barang LS (dipelajari dari pilih manual)
   bool tampilSaranPelanggan = false;
   List<String> _saranPelanggan(String prefix) {
     final q = prefix.trim().toLowerCase();
@@ -187,6 +190,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
     cachePelanggan.insert(0, v);
     _db.simpanPelanggan(v);
   }
+  // Nama dinormalkan untuk pencocokan: huruf kecil, tanpa spasi/tanda baca.
+  // "Bekel Putih" dan "bekelputih" jadi sama: "bekelputih".
+  String _normalNama(String nama) => nama.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
   String _tanggalSimpanPO() {
     final skrg = DateTime.now();
     return "${skrg.day.toString().padLeft(2, '0')}/${skrg.month.toString().padLeft(2, '0')}/${skrg.year} ${skrg.hour.toString().padLeft(2, '0')}:${skrg.minute.toString().padLeft(2, '0')}";
@@ -486,6 +492,215 @@ class _S extends ConsumerState<HomeDaftarPO> {
       }),
     );
   }
+  // ===== CPS — Copas Teks jadi Step =====
+  // Tempel teks WA/chat -> tiap baris jadi 1 step CEK (masih bisa diedit di CPS, di CEK, sebelum Simpan PO).
+  // Nama dicocokkan ke list LS: 1) alias yang pernah dipilih manual, 2) nama mengandung (bukan harus sama persis).
+  void _bukaCPS() {
+    final tempelC = TextEditingController();
+    List<Map<String, dynamic>> baris = [];
+
+    // Rapikan angka: titik ribuan dibuang ("50.000" -> "50000"), koma desimal aman ("2,5").
+    String _rapikanAngka(String teks) {
+      final buf = StringBuffer();
+      for (var i = 0; i < teks.length; i++) {
+        final c = teks[i];
+        if (c == '.' && i > 0 && i + 4 <= teks.length) {
+          final sebelum = teks[i - 1];
+          final tiga = teks.substring(i + 1, i + 4);
+          final sesudah = i + 4 < teks.length ? teks[i + 4] : '';
+          final tigaDigit = RegExp(r'^[0-9]{3}$').hasMatch(tiga);
+          final sebelumDigit = RegExp(r'^[0-9]$').hasMatch(sebelum);
+          final sesudahBukanDigit = sesudah.isEmpty || !RegExp(r'^[0-9]$').hasMatch(sesudah);
+          if (sebelumDigit && tigaDigit && sesudahBukanDigit) continue; // titik ribuan, buang
+        }
+        buf.write(c);
+      }
+      return buf.toString();
+    }
+
+    // Cari barang di list LS: 1) alias yang pernah dipilih manual, 2) nama mengandung (bukan harus sama persis).
+    Map<String, dynamic>? _cocokMaster(String nama) {
+      final kunci = _normalNama(nama);
+      if (kunci.isEmpty) return null;
+      final kodeAlias = aliasCopas[kunci];
+      if (kodeAlias != null) {
+        for (final b in daftarBarang) {
+          if ("${b["kode"]}" == kodeAlias) return b;
+        }
+      }
+      for (final b in daftarBarang) {
+        final nb = _normalNama("${b["nama"]}");
+        if (nb.isEmpty) continue;
+        if (kunci.contains(nb) || nb.contains(kunci)) return b;
+      }
+      return null;
+    }
+
+    // 1 baris teks -> {nama, qty, harga, cocok, controller...}.
+    Map<String, dynamic> _parseSatu(String mentah) {
+      final teks = _rapikanAngka(mentah.replaceAll('`', '').replaceAll(RegExp(r'[Rr][Pp]\s*'), ''));
+      final nums = RegExp(r'[0-9]+(?:[.,][0-9]+)?')
+          .allMatches(teks)
+          .map((m) => double.tryParse(m.group(0)!.replaceAll(',', '.')) ?? 0)
+          .toList();
+      var nama = teks
+          .replaceAll(RegExp(r'[0-9]+(?:[.,][0-9]+)?'), ' ')
+          .replaceAll(RegExp(r'[xX×*/]'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      if (nama.isEmpty) nama = "Barang";
+      final cocok = _cocokMaster(nama);
+      double qty;
+      double harga;
+      if (nums.length >= 2) {
+        qty = nums[0];
+        harga = nums[1];
+      } else if (nums.length == 1 && nums[0] > 1000) {
+        qty = 1; // 1 angka besar = harga, bukan qty ("bekel 50000")
+        harga = nums[0];
+      } else {
+        qty = nums.isEmpty ? 1 : nums[0];
+        harga = 0;
+      }
+      if (harga == 0 && cocok != null) harga = double.tryParse("${cocok["harga1"]}") ?? 0;
+      final r = {"nama": nama, "qty": qty, "harga": harga, "cocok": cocok};
+      r["namaC"] = TextEditingController(text: nama);
+      r["qtyC"] = TextEditingController(text: qty.toStringAsFixed(qty % 1 == 0 ? 0 : 2));
+      r["hargaC"] = TextEditingController(text: harga.toStringAsFixed(harga % 1 == 0 ? 0 : 2));
+      return r;
+    }
+
+    // Pilih barang dari list LS untuk 1 baris (ganti yang cocok). Pilihan ini diingat sebagai alias.
+    void _pilihMaster(Map<String, dynamic> r, void Function(void Function()) setSheet) {
+      showModalBottomSheet(
+        context: context,
+        builder: (ctx2) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Padding(padding: EdgeInsets.all(12), child: Text("Pilih barang dari list LS", style: TextStyle(fontWeight: FontWeight.bold))),
+            SizedBox(height: 320, child: ListView.builder(itemCount: daftarBarang.length, itemBuilder: (_, j) {
+              final b = daftarBarang[j];
+              return ListTile(
+                title: Text("${b["nama"]}"),
+                subtitle: Text("${b["kode"]} • ${formatRupiah(int.tryParse("${b["harga1"]}") ?? 0)}"),
+                onTap: () {
+                  Navigator.pop(ctx2);
+                  setSheet(() {
+                    // Ingat pasangan ini: lain kali nama copasan yang sama langsung cocok otomatis.
+                    _db.simpanAliasCopas(namaCopas: "${r["nama"]}", kodeBarang: "${b["kode"]}");
+                    aliasCopas[_normalNama("${r["nama"]}")] = "${b["kode"]}";
+                    r["cocok"] = b;
+                    r["nama"] = "${b["nama"]}";
+                    (r["namaC"] as TextEditingController).text = "${b["nama"]}";
+                    final h = double.tryParse("${b["harga1"]}") ?? 0;
+                    r["harga"] = h;
+                    (r["hargaC"] as TextEditingController).text = h.toStringAsFixed(0);
+                  });
+                },
+              );
+            })),
+          ]),
+        ),
+      );
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => StatefulBuilder(builder: (ctx2, setSheet) {
+        return Padding(
+          padding: EdgeInsets.only(left: 12, right: 12, top: 12, bottom: MediaQuery.of(ctx).viewInsets.bottom + 12),
+          child: SizedBox(height: 580, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text("CPS — Copas Teks jadi Step", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+            ]),
+            const Text("1 baris = 1 barang. Angka pertama = qty, angka kedua = harga. Nama dicocokkan ke list LS.", style: TextStyle(fontSize: 11, color: Colors.grey)),
+            const SizedBox(height: 8),
+            TextField(controller: tempelC, maxLines: 4, decoration: dec("Tempel di sini...\nContoh:\nbekel 20\nsemen 5 x 50000\npasir 2")),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: OutlinedButton.icon(
+                icon: const Icon(Icons.paste, size: 18),
+                label: const Text("Tempel Clipboard"),
+                onPressed: () async {
+                  final d = await Clipboard.getData(Clipboard.kTextPlain);
+                  final t = d?.text ?? "";
+                  if (t.isNotEmpty) setSheet(() { tempelC.text = t; });
+                },
+              )),
+              const SizedBox(width: 8),
+              Expanded(child: ElevatedButton.icon(
+                icon: const Icon(Icons.auto_fix_high, size: 18),
+                label: const Text("Urai jadi Baris"),
+                onPressed: () {
+                  setSheet(() {
+                    baris = tempelC.text.split('\n').where((l) => l.trim().isNotEmpty).map((l) => _parseSatu(l)).toList();
+                  });
+                },
+              )),
+            ]),
+            const SizedBox(height: 8),
+            Expanded(child: baris.isEmpty
+                ? const Center(child: Text("Belum ada baris. Tempel teks lalu pencet Urai jadi Baris.", textAlign: TextAlign.center))
+                : ListView.builder(itemCount: baris.length, itemBuilder: (_, i) {
+                    final r = baris[i];
+                    final cocok = r["cocok"] as Map<String, dynamic>?;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          Expanded(child: TextField(controller: r["namaC"] as TextEditingController, decoration: const InputDecoration(labelText: "Nama barang", isDense: true, border: OutlineInputBorder()), onChanged: (v) { r["nama"] = v; })),
+                          IconButton(icon: const Icon(Icons.delete, size: 20, color: Colors.red), tooltip: "Hapus baris ini", onPressed: () => setSheet(() { baris.removeAt(i); })),
+                        ]),
+                        const SizedBox(height: 6),
+                        Row(children: [
+                          Expanded(child: TextField(controller: r["qtyC"] as TextEditingController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Qty", isDense: true, border: OutlineInputBorder()), onChanged: (v) { r["qty"] = double.tryParse(v) ?? 0; setSheet(() {}); })),
+                          const SizedBox(width: 6),
+                          Expanded(child: TextField(controller: r["hargaC"] as TextEditingController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Harga / nominal", isDense: true, border: OutlineInputBorder()), onChanged: (v) { r["harga"] = double.tryParse(v) ?? 0; setSheet(() {}); })),
+                        ]),
+                        const SizedBox(height: 6),
+                        Wrap(spacing: 6, children: [
+                          if (cocok != null)
+                            ActionChip(label: Text("Cocok: ${cocok["nama"]} — ${formatRupiah(int.tryParse("${cocok["harga1"]}") ?? 0)}", style: const TextStyle(fontSize: 11)), onPressed: () => _pilihMaster(r, setSheet))
+                          else
+                            ActionChip(label: const Text("Barang baru — tap pilih dari list LS", style: TextStyle(fontSize: 11)), onPressed: () => _pilihMaster(r, setSheet)),
+                        ]),
+                        const SizedBox(height: 4),
+                        Text("Subtotal = ${formatRupiah((((r["qty"] as num?)?.toDouble() ?? 0) * ((r["harga"] as num?)?.toDouble() ?? 0)).toInt())}", style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
+                      ]),
+                    );
+                  })),
+            const SizedBox(height: 8),
+            SizedBox(width: double.infinity, child: ElevatedButton.icon(
+              icon: const Icon(Icons.check, size: 18),
+              label: Text("Masukkan ${baris.length} Baris ke CEK"),
+              onPressed: baris.isEmpty ? null : () {
+                final jumlahBaris = baris.length;
+                for (final r in baris) {
+                  final nama = "${r["nama"]}".trim().isEmpty ? "Barang" : "${r["nama"]}".trim();
+                  final qty = (r["qty"] as num?)?.toDouble() ?? 0;
+                  final harga = (r["harga"] as num?)?.toDouble() ?? 0;
+                  final jumlah = qty * harga;
+                  _tambahStep({"item": nama, "rumus": "$nama : ${formatHasil(qty)} x ${formatRupiah(harga.toInt())} = ${formatRupiah(jumlah.toInt())}", "harga": harga, "qty": qty, "jumlah": jumlah});
+                }
+                Navigator.pop(ctx);
+                setState(() {
+                  layar = formatHasil(totalCek);
+                  ekspresi = "CPS: $jumlahBaris step masuk CEK";
+                });
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$jumlahBaris baris masuk CEK — edit di CEK sebelum Simpan PO.")));
+                bukaCek();
+              },
+            )),
+          ]))),
+        ;
+      }),
+    );
+  }
+
   void _inputAngka(String t) {
     if (adaError) { layar = "0"; ekspresi = ""; akumulator = 0; opPending = ""; op = ""; adaError = false; entryBaru = true; }
     layar = _stripBacktick(layar); // layar mungkin sudah berisi ` dari formatHasil sebelumnya
@@ -637,7 +852,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       return;
     }
     showModalBottomSheet(context: context, builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      const Padding(padding: EdgeInsets.all(12), child: Text("Tap barang untuk ganti nama step ini", style: TextStyle(fontWeight: FontWeight.bold))),
+      const Padding(padding: EdgeInsets.all(12), child: Text("Tap barang untuk ganti nama step ini", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
       SizedBox(height: 320, child: ListView.builder(itemCount: daftarBarang.length, itemBuilder: (_, j) {
         final b = daftarBarang[j];
         return ListTile(
@@ -834,6 +1049,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       }
       else if (t == "OFF") { layar = "0"; ekspresi = ""; akumulator = 0; angka1 = 0; opPending = ""; op = ""; entryBaru = true; adaError = false; operanSiap = false; }
       else if (t == "PO") { _bukaCariPO(); }
+      else if (t == "CPS") { _bukaCPS(); }
       else if (t == "LS") { bukaListLS(); }
       else if (t == "CEK") { bukaCek(); }
       else if (t == "TAX+") { _pencetTaxPlus(); }
@@ -1160,7 +1376,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           ])))),
           Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(10, 18, 10, 10),
             child: Column(children: [
-              Expanded(child: Row(children: [tombol("AC", bg: Colors.blue.shade400, fg: Colors.white), tombol("MRC", bg: Colors.grey.shade400), tombol("M-", bg: Colors.grey.shade400), tombol("M+", bg: Colors.green, fg: Colors.white, besar: true), tombol("LS", bg: Colors.orange.shade100, besar: true), tombol("CEK", bg: Colors.black, fg: Colors.white), tombol("BEP", bg: Colors.pink, fg: Colors.white)])),
+              Expanded(child: Row(children: [tombol("AC", bg: Colors.blue.shade400, fg: Colors.white), tombol("MRC", bg: Colors.grey.shade400), tombol("M-", bg: Colors.grey.shade400), tombol("M+", bg: Colors.green, fg: Colors.white, besar: true), tombol("LS", bg: Colors.orange.shade100, besar: true), tombol("CEK", bg: Colors.black, fg: Colors.white), tombol("CPS", bg: Colors.amber, fg: Colors.black), tombol("BEP", bg: Colors.pink, fg: Colors.white)])),
               Expanded(child: Row(children: [tombol("OFF", bg: Colors.blue.shade400, fg: Colors.white), tombol("7"), tombol("8"), tombol("9"), tombol("RIW", bg: Colors.grey.shade300), tombol("MU", bg: Colors.grey.shade300), tombol("MC", bg: Colors.grey.shade300)])),
               Expanded(child: Row(children: [tombol("%", bg: Colors.grey.shade300), tombol("4"), tombol("5"), tombol("6"), tombol("-", bg: Colors.grey.shade300), tombol("÷", bg: Colors.grey.shade300), tombol("MR", bg: Colors.grey.shade300)])),
               Expanded(child: Row(children: [tombol("+/-", bg: Colors.grey.shade300), tombol("1"), tombol("2"), tombol("3"), tombol("+", bg: Colors.grey.shade300), tombol("x", bg: Colors.grey.shade300), tombol("PO", bg: Colors.teal, fg: Colors.white)])),
