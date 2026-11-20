@@ -749,7 +749,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
             const SizedBox(height: 6),
             TextField(decoration: dec("🔍 Cari log step — nama barang / rumus / tanggal..."), onChanged: (v) { setSheet(() { queryRiwayat = v; }); setState(() { queryRiwayat = v; }); }),
             const SizedBox(height: 8),
-            Expanded(child: hasil.isEmpty ? const Center(child: Text("Belum ada log step. Hitung / pencet = / M+ dulu — tiap step otomatis tercatat di sini."), textAlign: TextAlign.center) : ListView.builder(itemCount: hasil.length, itemBuilder: (_, j) {
+            Expanded(child: hasil.isEmpty ? const Center(child: Text("Belum ada log step. Hitung / pencet = / M+ dulu — tiap step otomatis tercatat di sini.", textAlign: TextAlign.center)) : ListView.builder(itemCount: hasil.length, itemBuilder: (_, j) {
               final r = hasil[j];
               return Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.all(10), decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
                 child: Row(children: [
