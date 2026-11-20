@@ -1,82 +1,82 @@
-import 'dart:io';
-
-import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart';
 
-part 'po_database.g.dart';
+// PO + Riwayat tersimpan di SQLite (sqflite, tanpa codegen).
+// API kelas ini SENGAJA dibuat sama persis dengan versi Drift sebelumnya,
+// jadi home_daftar_po.dart tidak perlu diubah sama sekali.
+//
+// Tabel:
+//   po_tersimpan      -> 1 baris = 1 PO (nomor, tanggal, total)
+//   po_item_tersimpan -> step / item di dalam 1 PO
+//   riwayat_po        -> Simpan / Revisi
+class PoDatabase {
+  static const _namaFile = 'po_kalkulator.sqlite';
+  static const _versi = 1;
 
-// ===== TABEL 1: PO tersimpan (1 baris = 1 PO) =====
-class PoTersimpan extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  TextColumn get nomor => text()();
-  TextColumn get tanggal => text()();
-  RealColumn get total => real()();
-  IntColumn get dibuatPada => integer()(); // millisSinceEpoch, untuk urut terbaru dulu
-}
+  Future<Database>? _dbFuture;
 
-// ===== TABEL 2: step / item di dalam 1 PO =====
-class PoItemTersimpan extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  IntColumn get poId => integer().references(PoTersimpan, #id)();
-  TextColumn get item => text()();
-  TextColumn get rumus => text()();
-  RealColumn get harga => real()();
-  RealColumn get qty => real()();
-  RealColumn get jumlah => real()();
-  IntColumn get urutan => integer()();
-}
+  Future<Database> get _database {
+    _dbFuture ??= _buka();
+    return _dbFuture!;
+  }
 
-// ===== TABEL 3: riwayat PO (Simpan / Revisi) =====
-class RiwayatPo extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  TextColumn get nomor => text()();
-  TextColumn get tanggal => text()();
-  TextColumn get aksi => text()();
-  RealColumn get total => real()();
-  TextColumn get ringkasan => text()();
-  IntColumn get dibuatPada => integer()();
-}
-
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dir.path, 'po_kalkulator.sqlite'));
-    return NativeDatabase.createInBackground(file);
-  });
-}
-
-@DriftDatabase(tables: [PoTersimpan, PoItemTersimpan, RiwayatPo])
-class PoDatabase extends _$PoDatabase {
-  PoDatabase() : super(_openConnection());
-
-  @override
-  int get schemaVersion => 1;
+  Future<Database> _buka() async {
+    final dir = await getDatabasesPath();
+    final path = p.join(dir, _namaFile);
+    return openDatabase(path, version: _versi, onCreate: (db, version) async {
+      await db.execute(
+        'CREATE TABLE po_tersimpan('
+        'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+        'nomor TEXT NOT NULL, '
+        'tanggal TEXT NOT NULL, '
+        'total REAL NOT NULL, '
+        'dibuat_pada INTEGER NOT NULL)',
+      );
+      await db.execute(
+        'CREATE TABLE po_item_tersimpan('
+        'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+        'po_id INTEGER NOT NULL, '
+        'item TEXT NOT NULL, '
+        'rumus TEXT NOT NULL, '
+        'harga REAL NOT NULL, '
+        'qty REAL NOT NULL, '
+        'jumlah REAL NOT NULL, '
+        'urutan INTEGER NOT NULL, '
+        'FOREIGN KEY (po_id) REFERENCES po_tersimpan (id))',
+      );
+      await db.execute(
+        'CREATE TABLE riwayat_po('
+        'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+        'nomor TEXT NOT NULL, '
+        'tanggal TEXT NOT NULL, '
+        'aksi TEXT NOT NULL, '
+        'total REAL NOT NULL, '
+        'ringkasan TEXT NOT NULL, '
+        'dibuat_pada INTEGER NOT NULL)',
+      );
+    });
+  }
 
   // ===== PO =====
   Future<List<Map<String, dynamic>>> muatSemuaPo() async {
-    final rows = await (select(poTersimpan)
-          ..orderBy([(t) => OrderingTerm(expression: t.dibuatPada, mode: OrderingMode.desc)]))
-        .get();
+    final db = await _database;
+    final rows = await db.query('po_tersimpan', orderBy: 'dibuat_pada DESC');
     final hasil = <Map<String, dynamic>>[];
     for (final r in rows) {
-      final items = await (select(poItemTersimpan)
-            ..where((t) => t.poId.equals(r.id))
-            ..orderBy([(t) => OrderingTerm(expression: t.urutan)]))
-          .get();
+      final items = await db.query('po_item_tersimpan',
+          where: 'po_id = ?', whereArgs: [r['id']], orderBy: 'urutan ASC');
       hasil.add({
-        "id": r.id,
-        "nomor": r.nomor,
-        "tanggal": r.tanggal,
-        "total": r.total,
+        "id": r['id'],
+        "nomor": r['nomor'],
+        "tanggal": r['tanggal'],
+        "total": (r['total'] as num).toDouble(),
         "items": items
             .map((e) => {
-                  "item": e.item,
-                  "rumus": e.rumus,
-                  "harga": e.harga,
-                  "qty": e.qty,
-                  "jumlah": e.jumlah,
+                  "item": e['item'],
+                  "rumus": e['rumus'],
+                  "harga": (e['harga'] as num).toDouble(),
+                  "qty": (e['qty'] as num).toDouble(),
+                  "jumlah": (e['jumlah'] as num).toDouble(),
                 })
             .toList(),
       });
@@ -90,13 +90,14 @@ class PoDatabase extends _$PoDatabase {
     required double total,
     required List<Map<String, dynamic>> items,
   }) async {
-    final id = await into(poTersimpan).insert(PoTersimpanCompanion(
-      nomor: Value(nomor),
-      tanggal: Value(tanggal),
-      total: Value(total),
-      dibuatPada: Value(DateTime.now().millisecondsSinceEpoch),
-    ));
-    await _tulisItems(id, items);
+    final db = await _database;
+    final id = await db.insert('po_tersimpan', {
+      'nomor': nomor,
+      'tanggal': tanggal,
+      'total': total,
+      'dibuat_pada': DateTime.now().millisecondsSinceEpoch,
+    });
+    await _tulisItems(db, id, items);
     return id;
   }
 
@@ -106,29 +107,32 @@ class PoDatabase extends _$PoDatabase {
     required double total,
     required List<Map<String, dynamic>> items,
   }) async {
-    await (update(poTersimpan)..where((t) => t.id.equals(id)))
-        .write(PoTersimpanCompanion(tanggal: Value(tanggal), total: Value(total)));
-    await (delete(poItemTersimpan)..where((t) => t.poId.equals(id))).go();
-    await _tulisItems(id, items);
+    final db = await _database;
+    await db.update('po_tersimpan', {'tanggal': tanggal, 'total': total},
+        where: 'id = ?', whereArgs: [id]);
+    await db.delete('po_item_tersimpan', where: 'po_id = ?', whereArgs: [id]);
+    await _tulisItems(db, id, items);
   }
 
   Future<void> hapusPo(int id) async {
-    await (delete(poItemTersimpan)..where((t) => t.poId.equals(id))).go();
-    await (delete(poTersimpan)..where((t) => t.id.equals(id))).go();
+    final db = await _database;
+    await db.delete('po_item_tersimpan', where: 'po_id = ?', whereArgs: [id]);
+    await db.delete('po_tersimpan', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<void> _tulisItems(int poId, List<Map<String, dynamic>> items) async {
+  Future<void> _tulisItems(
+      Database db, int poId, List<Map<String, dynamic>> items) async {
     for (var k = 0; k < items.length; k++) {
       final e = items[k];
-      await into(poItemTersimpan).insert(PoItemTersimpanCompanion(
-        poId: Value(poId),
-        item: Value("${e["item"]}"),
-        rumus: Value("${e["rumus"] ?? ""}"),
-        harga: Value((e["harga"] as num?)?.toDouble() ?? 0),
-        qty: Value((e["qty"] as num?)?.toDouble() ?? 0),
-        jumlah: Value((e["jumlah"] as num?)?.toDouble() ?? 0),
-        urutan: Value(k),
-      ));
+      await db.insert('po_item_tersimpan', {
+        'po_id': poId,
+        'item': "${e["item"]}",
+        'rumus': "${e["rumus"] ?? ""}",
+        'harga': (e["harga"] as num?)?.toDouble() ?? 0,
+        'qty': (e["qty"] as num?)?.toDouble() ?? 0,
+        'jumlah': (e["jumlah"] as num?)?.toDouble() ?? 0,
+        'urutan': k,
+      });
     }
   }
 
@@ -140,37 +144,47 @@ class PoDatabase extends _$PoDatabase {
     required double total,
     required String ringkasan,
   }) async {
-    return into(riwayatPo).insert(RiwayatPoCompanion(
-      nomor: Value(nomor),
-      tanggal: Value(tanggal),
-      aksi: Value(aksi),
-      total: Value(total),
-      ringkasan: Value(ringkasan),
-      dibuatPada: Value(DateTime.now().millisecondsSinceEpoch),
-    ));
+    final db = await _database;
+    return db.insert('riwayat_po', {
+      'nomor': nomor,
+      'tanggal': tanggal,
+      'aksi': aksi,
+      'total': total,
+      'ringkasan': ringkasan,
+      'dibuat_pada': DateTime.now().millisecondsSinceEpoch,
+    });
   }
 
   Future<List<Map<String, dynamic>>> muatSemuaRiwayat() async {
-    final rows = await (select(riwayatPo)
-          ..orderBy([(t) => OrderingTerm(expression: t.dibuatPada, mode: OrderingMode.desc)]))
-        .get();
+    final db = await _database;
+    final rows = await db.query('riwayat_po', orderBy: 'dibuat_pada DESC');
     return rows
         .map((r) => {
-              "id": r.id,
-              "nomor": r.nomor,
-              "tanggal": r.tanggal,
-              "aksi": r.aksi,
-              "total": r.total,
-              "ringkasan": r.ringkasan,
+              "id": r['id'],
+              "nomor": r['nomor'],
+              "tanggal": r['tanggal'],
+              "aksi": r['aksi'],
+              "total": (r['total'] as num).toDouble(),
+              "ringkasan": r['ringkasan'],
             })
         .toList();
   }
 
   Future<void> hapusRiwayat(int id) async {
-    await (delete(riwayatPo)..where((t) => t.id.equals(id))).go();
+    final db = await _database;
+    await db.delete('riwayat_po', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> hapusSemuaRiwayat() async {
-    await delete(riwayatPo).go();
+    final db = await _database;
+    await db.delete('riwayat_po');
+  }
+
+  Future<void> close() async {
+    final f = _dbFuture;
+    _dbFuture = null;
+    if (f == null) return;
+    final db = await f;
+    if (db.isOpen) await db.close();
   }
 }
