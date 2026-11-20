@@ -1,17 +1,22 @@
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
-// PO + Riwayat tersimpan di SQLite (sqflite, tanpa codegen).
-// API kelas ini SENGAJA dibuat sama persis dengan versi Drift sebelumnya,
-// jadi home_daftar_po.dart tidak perlu diubah sama sekali.
+// PO + Log Step + Cache Pelanggan, tersimpan di SQLite (sqflite, tanpa codegen).
+//
+// Modelnya:
+//   - Log step (riwayat) = 1 step = 1 subtotal. Tiap step baru langsung tercatat.
+//     Riwayat TIDAK nunggu PO.
+//   - PO = kumpulan step (1 paragraf). Disimpan lewat tombol "Simpan PO".
+//   - Pelanggan = nama yang pernah diinput sekali -> dipakai lagi untuk saran otomatis.
 //
 // Tabel:
-//   po_tersimpan      -> 1 baris = 1 PO (nomor, tanggal, total)
+//   po_tersimpan      -> 1 baris = 1 PO (nomor, tanggal, pelanggan, total)
 //   po_item_tersimpan -> step / item di dalam 1 PO
-//   riwayat_po        -> Simpan / Revisi
+//   log_step          -> log tiap step (riwayat)
+//   pelanggan         -> cache nama pelanggan
 class PoDatabase {
   static const _namaFile = 'po_kalkulator.sqlite';
-  static const _versi = 1;
+  static const _versi = 2;
 
   Future<Database>? _dbFuture;
 
@@ -23,38 +28,72 @@ class PoDatabase {
   Future<Database> _buka() async {
     final dir = await getDatabasesPath();
     final path = p.join(dir, _namaFile);
-    return openDatabase(path, version: _versi, onCreate: (db, version) async {
-      await db.execute(
-        'CREATE TABLE po_tersimpan('
-        'id INTEGER PRIMARY KEY AUTOINCREMENT, '
-        'nomor TEXT NOT NULL, '
-        'tanggal TEXT NOT NULL, '
-        'total REAL NOT NULL, '
-        'dibuat_pada INTEGER NOT NULL)',
-      );
-      await db.execute(
-        'CREATE TABLE po_item_tersimpan('
-        'id INTEGER PRIMARY KEY AUTOINCREMENT, '
-        'po_id INTEGER NOT NULL, '
-        'item TEXT NOT NULL, '
-        'rumus TEXT NOT NULL, '
-        'harga REAL NOT NULL, '
-        'qty REAL NOT NULL, '
-        'jumlah REAL NOT NULL, '
-        'urutan INTEGER NOT NULL, '
-        'FOREIGN KEY (po_id) REFERENCES po_tersimpan (id))',
-      );
-      await db.execute(
-        'CREATE TABLE riwayat_po('
-        'id INTEGER PRIMARY KEY AUTOINCREMENT, '
-        'nomor TEXT NOT NULL, '
-        'tanggal TEXT NOT NULL, '
-        'aksi TEXT NOT NULL, '
-        'total REAL NOT NULL, '
-        'ringkasan TEXT NOT NULL, '
-        'dibuat_pada INTEGER NOT NULL)',
-      );
-    });
+    return openDatabase(path, version: _versi,
+        onCreate: (db, version) async {
+          await db.execute(
+            'CREATE TABLE po_tersimpan('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'nomor TEXT NOT NULL, '
+            'tanggal TEXT NOT NULL, '
+            'pelanggan TEXT NOT NULL DEFAULT \'\', '
+            'total REAL NOT NULL, '
+            'dibuat_pada INTEGER NOT NULL)',
+          );
+          await db.execute(
+            'CREATE TABLE po_item_tersimpan('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'po_id INTEGER NOT NULL, '
+            'item TEXT NOT NULL, '
+            'rumus TEXT NOT NULL, '
+            'harga REAL NOT NULL, '
+            'qty REAL NOT NULL, '
+            'jumlah REAL NOT NULL, '
+            'urutan INTEGER NOT NULL, '
+            'FOREIGN KEY (po_id) REFERENCES po_tersimpan (id))',
+          );
+          await db.execute(
+            'CREATE TABLE log_step('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'item TEXT NOT NULL, '
+            'rumus TEXT NOT NULL, '
+            'harga REAL NOT NULL, '
+            'qty REAL NOT NULL, '
+            'jumlah REAL NOT NULL, '
+            'dibuat_pada INTEGER NOT NULL)',
+          );
+          await db.execute(
+            'CREATE TABLE pelanggan('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'nama TEXT NOT NULL, '
+            'terakhir_dipakai INTEGER NOT NULL)',
+          );
+        },
+        onUpgrade: (db, oldVersion, newVersion) async {
+          if (oldVersion < 2) {
+            await db.execute(
+              'CREATE TABLE IF NOT EXISTS log_step('
+              'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+              'item TEXT NOT NULL, '
+              'rumus TEXT NOT NULL, '
+              'harga REAL NOT NULL, '
+              'qty REAL NOT NULL, '
+              'jumlah REAL NOT NULL, '
+              'dibuat_pada INTEGER NOT NULL)',
+            );
+            await db.execute(
+              'CREATE TABLE IF NOT EXISTS pelanggan('
+              'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+              'nama TEXT NOT NULL, '
+              'terakhir_dipakai INTEGER NOT NULL)',
+            );
+            try {
+              await db.execute(
+                  "ALTER TABLE po_tersimpan ADD COLUMN pelanggan TEXT NOT NULL DEFAULT ''");
+            } catch (_) {
+              // Kolom sudah ada (DB pernah dibuat versi 2) -> lewati.
+            }
+          }
+        });
   }
 
   // ===== PO =====
@@ -69,6 +108,7 @@ class PoDatabase {
         "id": r['id'],
         "nomor": r['nomor'],
         "tanggal": r['tanggal'],
+        "pelanggan": r['pelanggan'] ?? '',
         "total": (r['total'] as num).toDouble(),
         "items": items
             .map((e) => {
@@ -87,6 +127,7 @@ class PoDatabase {
   Future<int> simpanPoBaru({
     required String nomor,
     required String tanggal,
+    required String pelanggan,
     required double total,
     required List<Map<String, dynamic>> items,
   }) async {
@@ -94,6 +135,7 @@ class PoDatabase {
     final id = await db.insert('po_tersimpan', {
       'nomor': nomor,
       'tanggal': tanggal,
+      'pelanggan': pelanggan,
       'total': total,
       'dibuat_pada': DateTime.now().millisecondsSinceEpoch,
     });
@@ -104,11 +146,14 @@ class PoDatabase {
   Future<void> updatePo({
     required int id,
     required String tanggal,
+    required String pelanggan,
     required double total,
     required List<Map<String, dynamic>> items,
   }) async {
     final db = await _database;
-    await db.update('po_tersimpan', {'tanggal': tanggal, 'total': total},
+    await db.update(
+        'po_tersimpan',
+        {'tanggal': tanggal, 'pelanggan': pelanggan, 'total': total},
         where: 'id = ?', whereArgs: [id]);
     await db.delete('po_item_tersimpan', where: 'po_id = ?', whereArgs: [id]);
     await _tulisItems(db, id, items);
@@ -136,48 +181,75 @@ class PoDatabase {
     }
   }
 
-  // ===== RIWAYAT =====
-  Future<int> tambahRiwayat({
-    required String nomor,
-    required String tanggal,
-    required String aksi,
-    required double total,
-    required String ringkasan,
+  // ===== LOG STEP (Riwayat) =====
+  Future<int> tambahLogStep({
+    required String item,
+    required String rumus,
+    required double harga,
+    required double qty,
+    required double jumlah,
   }) async {
     final db = await _database;
-    return db.insert('riwayat_po', {
-      'nomor': nomor,
-      'tanggal': tanggal,
-      'aksi': aksi,
-      'total': total,
-      'ringkasan': ringkasan,
+    return db.insert('log_step', {
+      'item': item,
+      'rumus': rumus,
+      'harga': harga,
+      'qty': qty,
+      'jumlah': jumlah,
       'dibuat_pada': DateTime.now().millisecondsSinceEpoch,
     });
   }
 
-  Future<List<Map<String, dynamic>>> muatSemuaRiwayat() async {
+  Future<List<Map<String, dynamic>>> muatLogStep() async {
     final db = await _database;
-    final rows = await db.query('riwayat_po', orderBy: 'dibuat_pada DESC');
-    return rows
-        .map((r) => {
-              "id": r['id'],
-              "nomor": r['nomor'],
-              "tanggal": r['tanggal'],
-              "aksi": r['aksi'],
-              "total": (r['total'] as num).toDouble(),
-              "ringkasan": r['ringkasan'],
-            })
-        .toList();
+    final rows = await db.query('log_step', orderBy: 'dibuat_pada DESC');
+    return rows.map((r) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(
+          (r['dibuat_pada'] as num).toInt());
+      return {
+        "id": r['id'],
+        "item": r['item'],
+        "rumus": r['rumus'],
+        "harga": (r['harga'] as num).toDouble(),
+        "qty": (r['qty'] as num).toDouble(),
+        "jumlah": (r['jumlah'] as num).toDouble(),
+        "tanggal":
+            "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} ${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}",
+      };
+    }).toList();
   }
 
-  Future<void> hapusRiwayat(int id) async {
+  Future<void> hapusLogStep(int id) async {
     final db = await _database;
-    await db.delete('riwayat_po', where: 'id = ?', whereArgs: [id]);
+    await db.delete('log_step', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<void> hapusSemuaRiwayat() async {
+  Future<void> hapusSemuaLogStep() async {
     final db = await _database;
-    await db.delete('riwayat_po');
+    await db.delete('log_step');
+  }
+
+  // ===== CACHE PELANGGAN (untuk saran otomatis) =====
+  Future<List<String>> muatPelanggan() async {
+    final db = await _database;
+    final rows = await db.query('pelanggan',
+        orderBy: 'terakhir_dipakai DESC', limit: 50);
+    return rows.map((r) => "${r['nama']}").toList();
+  }
+
+  Future<void> simpanPelanggan(String nama) async {
+    final v = nama.trim();
+    if (v.isEmpty) return;
+    final db = await _database;
+    final skrg = DateTime.now().millisecondsSinceEpoch;
+    final ada = await db.query('pelanggan',
+        where: 'LOWER(nama) = ?', whereArgs: [v.toLowerCase()]);
+    if (ada.isEmpty) {
+      await db.insert('pelanggan', {'nama': v, 'terakhir_dipakai': skrg});
+    } else {
+      await db.update('pelanggan', {'terakhir_dipakai': skrg},
+          where: 'id = ?', whereArgs: [ada.first['id']]);
+    }
   }
 
   Future<void> close() async {
