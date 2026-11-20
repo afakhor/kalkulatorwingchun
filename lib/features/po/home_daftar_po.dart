@@ -51,11 +51,12 @@ class _AutoFieldS extends State<_AutoField> {
 // - Lebar = yang lebih panjang antara isi dan label, + padding kecil. Bukan lebar fix 140.
 // - Label: saat field kosong & belum di-tap, label duduk di dalam field.
 //   Saat di-tap / ada isi, label naik nembus border atas, pas di tengah (floatingLabelAlignment center).
+// - TANPA parameter angka: field ini selalu teks. Parameter angka yang tidak pernah dikasih nilai
+//   bikin flutter analyze warning unused_element_parameter, jadi tidak dibuat dari awal.
 class _LabelField extends StatefulWidget {
-  const _LabelField({required this.controller, required this.label, this.angka = false, this.onChanged, this.min = 44, this.max = 150});
+  const _LabelField({required this.controller, required this.label, this.onChanged, this.min = 44, this.max = 150});
   final TextEditingController controller;
   final String label;
-  final bool angka;
   final ValueChanged<String>? onChanged;
   final double min;
   final double max;
@@ -89,8 +90,8 @@ class _LabelFieldS extends State<_LabelField> {
       width: w,
       child: TextField(
         controller: widget.controller,
-        keyboardType: widget.angka ? TextInputType.number : TextInputType.text,
-        textAlign: widget.angka ? TextAlign.center : TextAlign.left,
+        keyboardType: TextInputType.text,
+        textAlign: TextAlign.left,
         style: const TextStyle(fontSize: 13),
         decoration: InputDecoration(
           labelText: widget.label,
