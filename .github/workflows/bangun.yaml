@@ -36,3 +36,5 @@ jobs:
         with:
           name: kalkulator-wingchun-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+      - name: Ikhtisar file terpakai
+        run: dart tool/cek_file_terpakai.dart
