@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
@@ -17,9 +19,12 @@ import 'package:sqflite/sqflite.dart';
 //   log_step          -> log tiap step (riwayat)
 //   pelanggan         -> cache nama pelanggan
 //   alias_copas       -> nama copasan -> kode barang LS
+//   barang            -> daftar barang LS (kode, nama, kategori, harga1, satuan, varian, satuanList)
+//   step_draf         -> step CEK yang sedang dikerjakan (draf). Disimpan tiap step berubah,
+//                        dimuat lagi saat buka aplikasi — jadi tutup aplikasi tidak hilang.
 class PoDatabase {
   static const _namaFile = 'po_kalkulator.sqlite';
-  static const _versi = 3;
+  static const _versi = 6; // v4: + nama_barang | v5: + harga_acuan/satuan_angka/op_satuan | v6: + tabel barang & step_draf (draf CEK anti-hilang)
 
   Future<Database>? _dbFuture;
 
@@ -48,6 +53,10 @@ class PoDatabase {
             'po_id INTEGER NOT NULL, '
             'item TEXT NOT NULL, '
             'rumus TEXT NOT NULL, '
+            'nama_barang TEXT NOT NULL DEFAULT \'\', '
+            'harga_acuan REAL NOT NULL DEFAULT 0, '
+            'satuan_angka REAL NOT NULL DEFAULT 1, '
+            'op_satuan TEXT NOT NULL DEFAULT \'x\', '
             'harga REAL NOT NULL, '
             'qty REAL NOT NULL, '
             'jumlah REAL NOT NULL, '
@@ -59,6 +68,10 @@ class PoDatabase {
             'id INTEGER PRIMARY KEY AUTOINCREMENT, '
             'item TEXT NOT NULL, '
             'rumus TEXT NOT NULL, '
+            'nama_barang TEXT NOT NULL DEFAULT \'\', '
+            'harga_acuan REAL NOT NULL DEFAULT 0, '
+            'satuan_angka REAL NOT NULL DEFAULT 1, '
+            'op_satuan TEXT NOT NULL DEFAULT \'x\', '
             'harga REAL NOT NULL, '
             'qty REAL NOT NULL, '
             'jumlah REAL NOT NULL, '
@@ -76,6 +89,32 @@ class PoDatabase {
             'nama_copas TEXT NOT NULL, '
             'kode_barang TEXT NOT NULL, '
             'terakhir_dipakai INTEGER NOT NULL)',
+          );
+          // v6: barang LS + draf step CEK (biar tutup aplikasi tidak hilang).
+          await db.execute(
+            'CREATE TABLE barang('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'kode TEXT NOT NULL, '
+            'nama TEXT NOT NULL, '
+            'kategori TEXT NOT NULL DEFAULT \'\', '
+            'harga1 TEXT NOT NULL DEFAULT \'\', '
+            'satuan TEXT NOT NULL DEFAULT \'sak\', '
+            'varian TEXT NOT NULL DEFAULT \'\', '
+            'satuan_list TEXT NOT NULL DEFAULT \'[]\')',
+          );
+          await db.execute(
+            'CREATE TABLE step_draf('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'item TEXT NOT NULL, '
+            'rumus TEXT NOT NULL, '
+            'nama_barang TEXT NOT NULL DEFAULT \'\', '
+            'harga_acuan REAL NOT NULL DEFAULT 0, '
+            'satuan_angka REAL NOT NULL DEFAULT 1, '
+            'op_satuan TEXT NOT NULL DEFAULT \'x\', '
+            'harga REAL NOT NULL, '
+            'qty REAL NOT NULL, '
+            'jumlah REAL NOT NULL, '
+            'urutan INTEGER NOT NULL)',
           );
         },
         onUpgrade: (db, oldVersion, newVersion) async {
@@ -112,6 +151,75 @@ class PoDatabase {
               'terakhir_dipakai INTEGER NOT NULL)',
             );
           }
+          if (oldVersion < 4) {
+            // v4: nama barang per step. DB lama tetap jalan — kolom baru default ''.
+            try {
+              await db.execute(
+                  "ALTER TABLE log_step ADD COLUMN nama_barang TEXT NOT NULL DEFAULT ''");
+            } catch (_) {}
+            try {
+              await db.execute(
+                  "ALTER TABLE po_item_tersimpan ADD COLUMN nama_barang TEXT NOT NULL DEFAULT ''");
+            } catch (_) {}
+          }
+          if (oldVersion < 5) {
+            // v5: pecahan Harga step CEK (Harga Acuan x/÷ Satuan). DB lama tetap jalan.
+            try {
+              await db.execute(
+                  'ALTER TABLE log_step ADD COLUMN harga_acuan REAL NOT NULL DEFAULT 0');
+            } catch (_) {}
+            try {
+              await db.execute(
+                  'ALTER TABLE log_step ADD COLUMN satuan_angka REAL NOT NULL DEFAULT 1');
+            } catch (_) {}
+            try {
+              await db.execute(
+                  "ALTER TABLE log_step ADD COLUMN op_satuan TEXT NOT NULL DEFAULT 'x'");
+            } catch (_) {}
+            try {
+              await db.execute(
+                  'ALTER TABLE po_item_tersimpan ADD COLUMN harga_acuan REAL NOT NULL DEFAULT 0');
+            } catch (_) {}
+            try {
+              await db.execute(
+                  'ALTER TABLE po_item_tersimpan ADD COLUMN satuan_angka REAL NOT NULL DEFAULT 1');
+            } catch (_) {}
+            try {
+              await db.execute(
+                  "ALTER TABLE po_item_tersimpan ADD COLUMN op_satuan TEXT NOT NULL DEFAULT 'x'");
+            } catch (_) {}
+            // Isi harga_acuan lama dari harga — biar step lama tidak jadi 0 di CEK.
+            await db.execute('UPDATE log_step SET harga_acuan = harga WHERE harga_acuan = 0');
+            await db.execute('UPDATE po_item_tersimpan SET harga_acuan = harga WHERE harga_acuan = 0');
+          }
+          if (oldVersion < 6) {
+            // v6: tabel barang LS + draf step CEK. DB lama tetap jalan (IF NOT EXISTS).
+            await db.execute(
+              'CREATE TABLE IF NOT EXISTS barang('
+              'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+              'kode TEXT NOT NULL, '
+              'nama TEXT NOT NULL, '
+              'kategori TEXT NOT NULL DEFAULT \'\', '
+              'harga1 TEXT NOT NULL DEFAULT \'\', '
+              'satuan TEXT NOT NULL DEFAULT \'sak\', '
+              'varian TEXT NOT NULL DEFAULT \'\', '
+              'satuan_list TEXT NOT NULL DEFAULT \'[]\')',
+            );
+            await db.execute(
+              'CREATE TABLE IF NOT EXISTS step_draf('
+              'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+              'item TEXT NOT NULL, '
+              'rumus TEXT NOT NULL, '
+              'nama_barang TEXT NOT NULL DEFAULT \'\', '
+              'harga_acuan REAL NOT NULL DEFAULT 0, '
+              'satuan_angka REAL NOT NULL DEFAULT 1, '
+              'op_satuan TEXT NOT NULL DEFAULT \'x\', '
+              'harga REAL NOT NULL, '
+              'qty REAL NOT NULL, '
+              'jumlah REAL NOT NULL, '
+              'urutan INTEGER NOT NULL)',
+            );
+          }
         });
   }
 
@@ -133,6 +241,10 @@ class PoDatabase {
             .map((e) => {
                   "item": e['item'],
                   "rumus": e['rumus'],
+                  "namaBarang": e['nama_barang'] ?? '',
+                  "hargaAcuan": (e['harga_acuan'] as num?)?.toDouble() ?? (e['harga'] as num?)?.toDouble() ?? 0,
+                  "satuanAngka": (e['satuan_angka'] as num?)?.toDouble() ?? 1,
+                  "opSatuan": e['op_satuan'] ?? 'x',
                   "harga": (e['harga'] as num).toDouble(),
                   "qty": (e['qty'] as num).toDouble(),
                   "jumlah": (e['jumlah'] as num).toDouble(),
@@ -192,6 +304,10 @@ class PoDatabase {
         'po_id': poId,
         'item': "${e["item"]}",
         'rumus': "${e["rumus"] ?? ""}",
+        'nama_barang': "${e["namaBarang"] ?? ""}",
+        'harga_acuan': (e["hargaAcuan"] as num?)?.toDouble() ?? (e["harga"] as num?)?.toDouble() ?? 0,
+        'satuan_angka': (e["satuanAngka"] as num?)?.toDouble() ?? 1,
+        'op_satuan': "${e["opSatuan"] ?? "x"}",
         'harga': (e["harga"] as num?)?.toDouble() ?? 0,
         'qty': (e["qty"] as num?)?.toDouble() ?? 0,
         'jumlah': (e["jumlah"] as num?)?.toDouble() ?? 0,
@@ -204,6 +320,10 @@ class PoDatabase {
   Future<int> tambahLogStep({
     required String item,
     required String rumus,
+    String namaBarang = '',
+    double hargaAcuan = 0,
+    double satuanAngka = 1,
+    String opSatuan = 'x',
     required double harga,
     required double qty,
     required double jumlah,
@@ -212,6 +332,10 @@ class PoDatabase {
     return db.insert('log_step', {
       'item': item,
       'rumus': rumus,
+      'nama_barang': namaBarang,
+      'harga_acuan': hargaAcuan,
+      'satuan_angka': satuanAngka,
+      'op_satuan': opSatuan,
       'harga': harga,
       'qty': qty,
       'jumlah': jumlah,
@@ -229,6 +353,10 @@ class PoDatabase {
         "id": r['id'],
         "item": r['item'],
         "rumus": r['rumus'],
+        "namaBarang": r['nama_barang'] ?? '',
+        "hargaAcuan": (r['harga_acuan'] as num?)?.toDouble() ?? (r['harga'] as num?)?.toDouble() ?? 0,
+        "satuanAngka": (r['satuan_angka'] as num?)?.toDouble() ?? 1,
+        "opSatuan": r['op_satuan'] ?? 'x',
         "harga": (r['harga'] as num).toDouble(),
         "qty": (r['qty'] as num).toDouble(),
         "jumlah": (r['jumlah'] as num).toDouble(),
@@ -293,6 +421,81 @@ class PoDatabase {
       await db.update('alias_copas',
           {'kode_barang': kodeBarang, 'terakhir_dipakai': skrg},
           where: 'id = ?', whereArgs: [ada.first['id']]);
+    }
+  }
+
+  // ===== BARANG LS (daftar barang — dulu cuma memori, sekarang tersimpan) =====
+  Future<List<Map<String, dynamic>>> muatBarang() async {
+    final db = await _database;
+    final rows = await db.query('barang', orderBy: 'id ASC');
+    return rows.map((r) {
+      List satuanList = [];
+      try {
+        final dec = jsonDecode("${r['satuan_list'] ?? '[]'}");
+        if (dec is List) satuanList = dec;
+      } catch (_) {}
+      return {
+        "kode": "${r['kode'] ?? ''}",
+        "nama": "${r['nama'] ?? ''}",
+        "kategori": "${r['kategori'] ?? ''}",
+        "harga1": "${r['harga1'] ?? ''}",
+        "satuan": "${r['satuan'] ?? 'sak'}",
+        "varian": "${r['varian'] ?? ''}",
+        "satuanList": satuanList,
+      };
+    }).toList();
+  }
+
+  Future<void> simpanBarang(List<Map<String, dynamic>> items) async {
+    final db = await _database;
+    await db.delete('barang');
+    for (final it in items) {
+      await db.insert('barang', {
+        'kode': "${it["kode"] ?? ''}",
+        'nama': "${it["nama"] ?? ''}",
+        'kategori': "${it["kategori"] ?? ''}",
+        'harga1': "${it["harga1"] ?? ''}",
+        'satuan': "${it["satuan"] ?? 'sak'}",
+        'varian': "${it["varian"] ?? ''}",
+        'satuan_list': jsonEncode(it["satuanList"] ?? []),
+      });
+    }
+  }
+
+  // ===== DRAF STEP CEK (step yang sedang dikerjakan — anti-hilang) =====
+  Future<List<Map<String, dynamic>>> muatStepDraf() async {
+    final db = await _database;
+    final rows = await db.query('step_draf', orderBy: 'urutan ASC');
+    return rows.map((r) => {
+          "item": "${r['item'] ?? ''}",
+          "rumus": "${r['rumus'] ?? ''}",
+          "namaBarang": "${r['nama_barang'] ?? ''}",
+          "hargaAcuan": (r['harga_acuan'] as num?)?.toDouble() ?? (r['harga'] as num?)?.toDouble() ?? 0,
+          "satuanAngka": (r['satuan_angka'] as num?)?.toDouble() ?? 1,
+          "opSatuan": "${r['op_satuan'] ?? 'x'}",
+          "harga": (r['harga'] as num?)?.toDouble() ?? 0,
+          "qty": (r['qty'] as num?)?.toDouble() ?? 0,
+          "jumlah": (r['jumlah'] as num?)?.toDouble() ?? 0,
+        }).toList();
+  }
+
+  Future<void> simpanStepDraf(List<Map<String, dynamic>> items) async {
+    final db = await _database;
+    await db.delete('step_draf');
+    var urutan = 0;
+    for (final it in items) {
+      await db.insert('step_draf', {
+        'item': "${it["item"] ?? ''}",
+        'rumus': "${it["rumus"] ?? ''}",
+        'nama_barang': "${it["namaBarang"] ?? ''}",
+        'harga_acuan': (it["hargaAcuan"] as num?)?.toDouble() ?? (it["harga"] as num?)?.toDouble() ?? 0,
+        'satuan_angka': (it["satuanAngka"] as num?)?.toDouble() ?? 1,
+        'op_satuan': "${it["opSatuan"] ?? 'x'}",
+        'harga': (it["harga"] as num?)?.toDouble() ?? 0,
+        'qty': (it["qty"] as num?)?.toDouble() ?? 0,
+        'jumlah': (it["jumlah"] as num?)?.toDouble() ?? 0,
+        'urutan': urutan++,
+      });
     }
   }
 
