@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 // tool/cek_file_terpakai.dart
 // IKHTISAR FILE TERPAKAI — jalan di CI (GitHub Actions) & di laptop.
 // Cara jalan: dart tool/cek_file_terpakai.dart
