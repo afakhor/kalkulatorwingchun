@@ -1,9 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import '../../core/formatter.dart';
 import 'po_provider.dart';
 import 'parse_cepat.dart';
+import 'po_models.dart';
+import '../nota/nota_pdf.dart';
+import '../nota/nota_preview.dart';
 
 class SatuanItem {
   SatuanItem({required String satuan, required this.dasar, required String qty, required String isi, required this.op, required String nominal, String satuanBaru = ''})
@@ -40,6 +44,165 @@ class _AutoFieldS extends State<_AutoField> {
     final nw = (tp.width + 26).clamp(widget.min, widget.max);
     if ((nw - w).abs() > 1) setState(() => w = nw);
   }
+
+  // ===== JEMBATAN WA / NOTA -> PoOrder (dipakai nota_pdf.dart + nota_preview.dart) =====
+  // Satu-satunya tempat yang tahu bentuk PoOrder. Kalau di proyek kamu nama
+  // constructor / enum-nya beda (misal Customer jadi Pelanggan, PoStatus.draft
+  // jadi PoStatus.baru), ubah HANYA fungsi _poOrderDariLayar() ini.
+  PoOrder _poOrderDariLayar({required String nama, required String nomorWA}) {
+    // Sumber item: utamakan poProvider (yang tampil di panel PO). Kalau panel PO
+    // kosong tapi steps kalkulator ada isinya, pakai steps sebagai fallback.
+    final po = ref.read(poProvider);
+    final List<PoItem> items = [];
+    if (po.items.isNotEmpty) {
+      for (final it in po.items) {
+        items.add(PoItem(namaBarang: it.namaBarang, qty: it.qty, hargaSatuan: it.hargaSatuan, diskonItem: 0));
+      }
+    } else {
+      for (final st in steps) {
+        final namaBarang = "${st["item"] ?? ""}";
+        final qty = (st["qty"] as num?)?.toDouble() ?? 1;
+        final harga = (st["harga"] as num?)?.toDouble() ?? 0;
+        if (namaBarang.trim().isNotEmpty && harga > 0) {
+          items.add(PoItem(namaBarang: namaBarang, qty: qty, hargaSatuan: harga, diskonItem: 0));
+        }
+      }
+    }
+    return PoOrder(
+      id: "PO-${DateTime.now().millisecondsSinceEpoch}",
+      tanggal: DateTime.now(),
+      customer: Customer(namaOrang: nama.trim().isEmpty ? "Pelanggan" : nama.trim(), nomorWA: nomorWA.trim()),
+      items: items,
+      diskonTotal: 0,
+      ongkir: 0,
+      dp: 0,
+      catatan: "",
+      status: PoStatus.draft,
+    );
+  }
+
+  // Teks WA: isinya SAMA dengan yang tampil di NotaPreview / PDF, jadi tidak
+  // ada 2 versi angka yang beda.
+  String _teksWA(PoOrder po) {
+    final buf = StringBuffer();
+    buf.writeln("TOKO BANGUNAN");
+    buf.writeln("${po.id} - ${formatTanggal(po.tanggal)}");
+    buf.writeln("Customer: ${po.customer.namaOrang} - ${po.customer.nomorWA}");
+    buf.writeln("------------------------------");
+    double subtotal = 0;
+    for (final i in po.items) {
+      final jumlah = i.qty * i.hargaSatuan - i.diskonItem;
+      subtotal += jumlah;
+      buf.writeln("${i.namaBarang} ${i.qty}x = ${formatRupiah(jumlah.toInt())}");
+    }
+    buf.writeln("------------------------------");
+    buf.writeln("Diskon: ${formatRupiah(po.diskonTotal)}");
+    buf.writeln("Ongkir: ${formatRupiah(po.ongkir)}");
+    final total = subtotal - po.diskonTotal + po.ongkir;
+    buf.writeln("TOTAL: ${formatRupiah(total.toInt())}");
+    buf.writeln("DP: ${formatRupiah(po.dp)}");
+    buf.writeln("Sisa Bayar: ${formatRupiah((total - po.dp).toInt())}");
+    if (po.catatan.trim().isNotEmpty) {
+      buf.writeln("Catatan: ${po.catatan}");
+    }
+    buf.writeln("Status: ${po.status.name}");
+    buf.writeln("Terima kasih");
+    return buf.toString();
+  }
+
+  // Dialog kecil: tanya nama + nomor WA 1x, lalu jalankan aksi (WA / Nota).
+  // Prefill dari cache, jadi tombol ke-2 tidak tanya lagi.
+  Future<void> _tanyaPelangganLalu(Future<void> Function(PoOrder po) aksi) async {
+    final po = ref.read(poProvider);
+    if (po.items.isEmpty && steps.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Belum ada item. Pilih barang via LS, ketik qty, lalu M+ dulu.")));
+      return;
+    }
+    final namaC = TextEditingController(text: namaPelangganTerakhir);
+    final waC = TextEditingController(text: nomorWATerakhir);
+    final jadi = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Nama pelanggan"),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: namaC, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: "Nama pelanggan", hintText: "Contoh: Budi")),
+          const SizedBox(height: 8),
+          TextField(controller: waC, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: "Nomor WA (boleh kosong)", hintText: "Contoh: 08123456789")),
+        ]),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Batal")), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Lanjut"))],
+      ),
+    );
+    if (jadi != true) {
+      return;
+    }
+    namaPelangganTerakhir = namaC.text;
+    nomorWATerakhir = waC.text;
+    final order = _poOrderDariLayar(nama: namaC.text, nomorWA: waC.text);
+    await aksi(order);
+  }
+
+  // Tombol hijau "Kirim WA": bikin PDF pakai buatPDFNota(), salin teks nota,
+  // tampilkan teksnya supaya bisa ditempel ke WA. Tanpa dependency baru:
+  // tidak pakai url_launcher / share_plus, jadi tidak perlu tambah pubspec.
+  Future<void> _kirimWA() async {
+    await _tanyaPelangganLalu((po) async {
+      final teks = _teksWA(po);
+      File? pdf;
+      try {
+        pdf = await buatPDFNota(po, Directory.systemTemp);
+      } catch (e) {
+        pdf = null;
+      }
+      await Clipboard.setData(ClipboardData(text: teks));
+      if (!mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Kirim WA"),
+          content: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text("Teks nota sudah disalin. Tempel (paste) ke chat WA pelanggan."),
+            if (pdf != null) ...[
+              const SizedBox(height: 8),
+              Text("PDF juga tersimpan di: ${pdf.path}", style: const TextStyle(fontSize: 11, color: Colors.black54)),
+            ],
+            const SizedBox(height: 8),
+            Container(padding: const EdgeInsets.all(8), color: const Color(0xFFF2F2F2), child: SelectableText(teks, style: const TextStyle(fontSize: 12))),
+          ])),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Tutup")),
+            FilledButton(onPressed: () { Clipboard.setData(ClipboardData(text: teks)); Navigator.pop(ctx); }, child: const Text("Salin lagi")),
+          ],
+        ),
+      );
+    });
+  }
+
+  // Tombol putih "Nota": tampilkan NotaPreview (file nota_preview.dart) apa adanya,
+  // tanpa tombol / UI lain di dalamnya, sesuai komentar di file itu.
+  Future<void> _bukaNota() async {
+    await _tanyaPelangganLalu((po) async {
+      if (!mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => Dialog(
+          insetPadding: const EdgeInsets.all(12),
+          child: SingleChildScrollView(child: Column(children: [
+            NotaPreview(po: po),
+            Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 12), child: Row(children: [
+              Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text("Tutup"))),
+              const SizedBox(width: 8),
+              Expanded(child: FilledButton(onPressed: () { Navigator.pop(ctx); _kirimWA(); }, child: const Text("Kirim WA"))),
+            ])),
+          ])),
+        ),
+      );
+    });
+  }
+
   @override Widget build(BuildContext context) {
     return SizedBox(width: w, child: TextField(controller: widget.controller, keyboardType: widget.angka ? TextInputType.number : TextInputType.text, textAlign: widget.angka ? TextAlign.center : TextAlign.left, style: const TextStyle(fontSize: 13), decoration: InputDecoration(hintText: widget.hint, isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11), border: const OutlineInputBorder()), onChanged: (v) { _ukur(); widget.onChanged?.call(v); }));
   }
@@ -160,6 +323,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
   String modeHitung = "PEMBULATAN";
   int desimal = 0;
   final List<Map<String, dynamic>> steps = [];
+  // Cache pelanggan untuk WA / Nota: ditanya 1x lewat dialog kecil, dipakai tombol berikutnya.
+  String namaPelangganTerakhir = "";
+  String nomorWATerakhir = "";
   double get hargaAcuan {
     if (barangDipilih != null) return double.tryParse("${barangDipilih!["harga1"]}") ?? 0;
     return 0;
@@ -203,44 +369,17 @@ class _S extends ConsumerState<HomeDaftarPO> {
     return neg ? "-$hasil" : hasil;
   }
   String formatHasil(double v) {
-    if (v.isNaN || v.isInfinite) {
-      return "E";
-    }
+    if (v.isNaN || v.isInfinite) return "E";
     String mentah;
-    if (modeHitung == "ORIGINAL") {
-      mentah = v.toStringAsFixed(desimal);
-    } else if (modeRound == "CUT") {
-      final p = desimal == 0 ? 1.0 : _pow10(desimal);
-      final potong = (v * p).truncate() / p;
-      mentah = desimal == 0 ? potong.round().toString() : potong.toStringAsFixed(desimal);
-    } else if (modeRound == "F") {
-      mentah = _buangNolBelakang(v.toStringAsFixed(6));
-    } else if (desimal == 0) {
-      mentah = v.round().toString();
-    } else {
-      mentah = v.toStringAsFixed(desimal);
-    }
+    if (modeHitung == "ORIGINAL") mentah = v.toStringAsFixed(desimal);
+    else if (modeRound == "CUT") { final p = desimal == 0 ? 1.0 : _pow10(desimal); final potong = (v * p).truncate() / p; mentah = desimal == 0 ? potong.round().toString() : potong.toStringAsFixed(desimal); }
+    else if (modeRound == "F") mentah = _buangNolBelakang(v.toStringAsFixed(6));
+    else if (desimal == 0) mentah = v.round().toString();
+    else mentah = v.toStringAsFixed(desimal);
     return _groupBacktick(mentah);
   }
-  double _pow10(int n) {
-    double r = 1;
-    for (int i = 0; i < n; i++) {
-      r *= 10;
-    }
-    return r;
-  }
-  String _buangNolBelakang(String s) {
-    if (!s.contains('.')) {
-      return s;
-    }
-    while (s.endsWith('0')) {
-      s = s.substring(0, s.length - 1);
-    }
-    if (s.endsWith('.')) {
-      s = s.substring(0, s.length - 1);
-    }
-    return s.isEmpty ? "0" : s;
-  }
+  double _pow10(int n) { double r = 1; for (int i = 0; i < n; i++) r *= 10; return r; }
+  String _buangNolBelakang(String s) { if (!s.contains('.')) return s; while (s.endsWith('0')) s = s.substring(0, s.length - 1); if (s.endsWith('.')) s = s.substring(0, s.length - 1); return s.isEmpty ? "0" : s; }
   // Operasi dasar Casio: a op b. Bagi 0 -> error, bukan 0 diam-diam.
   double? hitungDasar(double a, String o, double b) {
     if (o == "+") return a + b;
@@ -403,8 +542,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   // ===== TAX / CSM / ADD2 / ROUND — BARU, LACI TERPISAH =====
   double _angkaLayar() => _parseLayar();
-  void _pencetTaxPlus() { final v = _angkaLayar(); final pajak = v * tarifPajak / 100; layar = formatHasil(v + pajak); ekspresi = "${formatHasil(v)} TAX+ $tarifPajak% = ${formatHasil(v + pajak)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": v + pajak}); entryBaru = true; }
-  void _pencetTaxMin() { final v = _angkaLayar(); final bersih = v / (1 + tarifPajak / 100); layar = formatHasil(bersih); ekspresi = "${formatHasil(v)} TAX- $tarifPajak% = ${formatHasil(bersih)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": bersih}); entryBaru = true; }
+  void _pencetTaxPlus() { final v = _angkaLayar(); final pajak = v * tarifPajak / 100; layar = formatHasil(v + pajak); ekspresi = "${formatHasil(v)} TAX+ ${tarifPajak}% = ${formatHasil(v + pajak)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": v + pajak}); entryBaru = true; }
+  void _pencetTaxMin() { final v = _angkaLayar(); final bersih = v / (1 + tarifPajak / 100); layar = formatHasil(bersih); ekspresi = "${formatHasil(v)} TAX- ${tarifPajak}% = ${formatHasil(bersih)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": bersih}); entryBaru = true; }
   void _setTax() { final v = _angkaLayar(); if (v >= 0 && v <= 100) { tarifPajak = v; ekspresi = "SET TAX = ${formatHasil(v)}%"; layar = formatHasil(v); entryBaru = true; } }
   void _pencetCost() { laciCost = _angkaLayar(); ekspresi = "COST = ${formatHasil(laciCost)}"; entryBaru = true; _hitungCSM(); }
   void _pencetSell() { laciSell = _angkaLayar(); ekspresi = "SELL = ${formatHasil(laciSell)}"; entryBaru = true; _hitungCSM(); }
@@ -605,6 +744,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   // ===== BENTUK FISIK CASIO DJ-120 =====
   // Body krem, display hijau LCD 2 baris, tombol 3D: atas datar, bawah bayangan.
   // Tombol angka putih, operator abu, AC/ON biru, M+ hijau, = biru, BEP pink.
+  Widget _chipFungsi(String label, Color bg) { return Padding(padding: const EdgeInsets.only(right: 6), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: bg, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), minimumSize: const Size(0, 30)), onPressed: () => pencet(label), child: Text(label == "ROUND" ? "ROUND: $modeRound" : label == "ADD2" ? (modeAdd2 ? "ADD2: ON" : "ADD2: OFF") : label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))); }
   Widget tombol(String label, {Color? bg, Color? fg, bool besar = false}) {
     final isDown = tombolDitekan == label && tekanTombol;
     final baseColor = bg ?? Colors.white;
@@ -653,9 +793,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
           const SizedBox(width: 4),
           Expanded(child: SizedBox(height: 32, child: SegmentedButton<int>(segments: const [ButtonSegment(value: 0, label: Text("0", style: TextStyle(fontSize: 9))), ButtonSegment(value: 2, label: Text("2", style: TextStyle(fontSize: 9))), ButtonSegment(value: 3, label: Text("3", style: TextStyle(fontSize: 9)))], selected: {desimal}, onSelectionChanged: (s) => setState(() { desimal = s.first; })))),
           const SizedBox(width: 4),
-          Expanded(child: SizedBox(height: 32, child: FilledButton(onPressed: () {}, style: FilledButton.styleFrom(padding: EdgeInsets.zero, textStyle: const TextStyle(fontSize: 10)), child: const Text("Kirim WA")))),
+          Expanded(child: SizedBox(height: 32, child: FilledButton(onPressed: _kirimWA, style: FilledButton.styleFrom(padding: EdgeInsets.zero, textStyle: const TextStyle(fontSize: 10)), child: const Text("Kirim WA")))),
           const SizedBox(width: 4),
-          Expanded(child: SizedBox(height: 32, child: OutlinedButton(onPressed: () {}, style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, textStyle: const TextStyle(fontSize: 9), backgroundColor: Colors.white), child: const Text("Nota")))),
+          Expanded(child: SizedBox(height: 32, child: OutlinedButton(onPressed: _bukaNota, style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, textStyle: const TextStyle(fontSize: 9), backgroundColor: Colors.white), child: const Text("Nota")))),
         ]),
       ]),
     );
