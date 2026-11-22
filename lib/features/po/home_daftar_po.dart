@@ -203,17 +203,44 @@ class _S extends ConsumerState<HomeDaftarPO> {
     return neg ? "-$hasil" : hasil;
   }
   String formatHasil(double v) {
-    if (v.isNaN || v.isInfinite) return "E";
+    if (v.isNaN || v.isInfinite) {
+      return "E";
+    }
     String mentah;
-    if (modeHitung == "ORIGINAL") mentah = v.toStringAsFixed(desimal);
-    else if (modeRound == "CUT") { final p = desimal == 0 ? 1.0 : _pow10(desimal); final potong = (v * p).truncate() / p; mentah = desimal == 0 ? potong.round().toString() : potong.toStringAsFixed(desimal); }
-    else if (modeRound == "F") mentah = _buangNolBelakang(v.toStringAsFixed(6));
-    else if (desimal == 0) mentah = v.round().toString();
-    else mentah = v.toStringAsFixed(desimal);
+    if (modeHitung == "ORIGINAL") {
+      mentah = v.toStringAsFixed(desimal);
+    } else if (modeRound == "CUT") {
+      final p = desimal == 0 ? 1.0 : _pow10(desimal);
+      final potong = (v * p).truncate() / p;
+      mentah = desimal == 0 ? potong.round().toString() : potong.toStringAsFixed(desimal);
+    } else if (modeRound == "F") {
+      mentah = _buangNolBelakang(v.toStringAsFixed(6));
+    } else if (desimal == 0) {
+      mentah = v.round().toString();
+    } else {
+      mentah = v.toStringAsFixed(desimal);
+    }
     return _groupBacktick(mentah);
   }
-  double _pow10(int n) { double r = 1; for (int i = 0; i < n; i++) r *= 10; return r; }
-  String _buangNolBelakang(String s) { if (!s.contains('.')) return s; while (s.endsWith('0')) s = s.substring(0, s.length - 1); if (s.endsWith('.')) s = s.substring(0, s.length - 1); return s.isEmpty ? "0" : s; }
+  double _pow10(int n) {
+    double r = 1;
+    for (int i = 0; i < n; i++) {
+      r *= 10;
+    }
+    return r;
+  }
+  String _buangNolBelakang(String s) {
+    if (!s.contains('.')) {
+      return s;
+    }
+    while (s.endsWith('0')) {
+      s = s.substring(0, s.length - 1);
+    }
+    if (s.endsWith('.')) {
+      s = s.substring(0, s.length - 1);
+    }
+    return s.isEmpty ? "0" : s;
+  }
   // Operasi dasar Casio: a op b. Bagi 0 -> error, bukan 0 diam-diam.
   double? hitungDasar(double a, String o, double b) {
     if (o == "+") return a + b;
@@ -376,8 +403,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   // ===== TAX / CSM / ADD2 / ROUND — BARU, LACI TERPISAH =====
   double _angkaLayar() => _parseLayar();
-  void _pencetTaxPlus() { final v = _angkaLayar(); final pajak = v * tarifPajak / 100; layar = formatHasil(v + pajak); ekspresi = "${formatHasil(v)} TAX+ ${tarifPajak}% = ${formatHasil(v + pajak)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": v + pajak}); entryBaru = true; }
-  void _pencetTaxMin() { final v = _angkaLayar(); final bersih = v / (1 + tarifPajak / 100); layar = formatHasil(bersih); ekspresi = "${formatHasil(v)} TAX- ${tarifPajak}% = ${formatHasil(bersih)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": bersih}); entryBaru = true; }
+  void _pencetTaxPlus() { final v = _angkaLayar(); final pajak = v * tarifPajak / 100; layar = formatHasil(v + pajak); ekspresi = "${formatHasil(v)} TAX+ $tarifPajak% = ${formatHasil(v + pajak)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": v + pajak}); entryBaru = true; }
+  void _pencetTaxMin() { final v = _angkaLayar(); final bersih = v / (1 + tarifPajak / 100); layar = formatHasil(bersih); ekspresi = "${formatHasil(v)} TAX- $tarifPajak% = ${formatHasil(bersih)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": bersih}); entryBaru = true; }
   void _setTax() { final v = _angkaLayar(); if (v >= 0 && v <= 100) { tarifPajak = v; ekspresi = "SET TAX = ${formatHasil(v)}%"; layar = formatHasil(v); entryBaru = true; } }
   void _pencetCost() { laciCost = _angkaLayar(); ekspresi = "COST = ${formatHasil(laciCost)}"; entryBaru = true; _hitungCSM(); }
   void _pencetSell() { laciSell = _angkaLayar(); ekspresi = "SELL = ${formatHasil(laciSell)}"; entryBaru = true; _hitungCSM(); }
@@ -519,7 +546,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
         return StatefulBuilder(builder: (ctx2, setSheet) {
           return Padding(padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 12, right: 12, top: 12),
             child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Tambah Barang", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), IconButton(icon: const Icon(Icons.close), onPressed: () { _diFormTambahBarang = false; Navigator.pop(ctx); })]),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Tambah Barang", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx))]),
               const SizedBox(height: 12),
               Row(children: [Expanded(child: TextField(controller: kodeCtrl, decoration: dec("Code *"))), const SizedBox(width: 8), Expanded(child: TextField(controller: namaCtrl, decoration: dec("Name *")))]),
               const SizedBox(height: 12),
@@ -578,7 +605,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
   // ===== BENTUK FISIK CASIO DJ-120 =====
   // Body krem, display hijau LCD 2 baris, tombol 3D: atas datar, bawah bayangan.
   // Tombol angka putih, operator abu, AC/ON biru, M+ hijau, = biru, BEP pink.
-  Widget _chipFungsi(String label, Color bg) { return Padding(padding: const EdgeInsets.only(right: 6), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: bg, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), minimumSize: const Size(0, 30)), onPressed: () => pencet(label), child: Text(label == "ROUND" ? "ROUND: $modeRound" : label == "ADD2" ? (modeAdd2 ? "ADD2: ON" : "ADD2: OFF") : label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))); }
   Widget tombol(String label, {Color? bg, Color? fg, bool besar = false}) {
     final isDown = tombolDitekan == label && tekanTombol;
     final baseColor = bg ?? Colors.white;
@@ -600,7 +626,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   @override Widget build(BuildContext context) {
     final po = ref.watch(poProvider);
-    final hasil = ref.read(poProvider.notifier).hitungTotal();
     // SUBTOTAL FIX: hitung dari item PO yang sudah benar (qty x harga), bukan dari layar.
     // Kalau provider salah hitung, hitung ulang di sini sebagai pengaman:
     final subtotalAman = po.items.fold<double>(0, (a, it) => a + (it.qty * it.hargaSatuan));
@@ -669,8 +694,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
           ))
         else
           _stripTengah(),
-          Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(10, 18, 10, 10),
-            child: Column(children: [
+        Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(10, 18, 10, 10),
+          child: Column(children: [
               Expanded(child: Row(children: [tombol("AC", bg: Colors.blue.shade400, fg: Colors.white), tombol("MRC", bg: Colors.grey.shade400), tombol("M-", bg: Colors.grey.shade400), tombol("M+", bg: Colors.green, fg: Colors.white, besar: true), tombol("LS", bg: Colors.orange.shade100, besar: true), tombol("CEK", bg: Colors.black, fg: Colors.white), tombol("CPS", bg: Colors.amber, fg: Colors.black), tombol("BEP", bg: Colors.pink, fg: Colors.white)])),
               Expanded(child: Row(children: [tombol("OFF", bg: Colors.blue.shade400, fg: Colors.white), tombol("7"), tombol("8"), tombol("9"), tombol("RIW", bg: Colors.grey.shade300), tombol("MU", bg: Colors.grey.shade300), tombol("MC", bg: Colors.grey.shade300)])),
               Expanded(child: Row(children: [tombol("%", bg: Colors.grey.shade300), tombol("4"), tombol("5"), tombol("6"), tombol("-", bg: Colors.grey.shade300), tombol("÷", bg: Colors.grey.shade300), tombol("MR", bg: Colors.grey.shade300)])),
