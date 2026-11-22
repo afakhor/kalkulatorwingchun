@@ -151,7 +151,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   // Tap tombol yang sama 2x = tutup panel. Strip TAX+..ADD2 di bawah panel ini TIDAK ikut berubah.
   Widget _panelForm() {
     final mode = _tombolKuningAktif;
-    if (mode.isEmpty) return const SizedBox.shrink();
+    if (mode.isEmpty) { return const SizedBox.shrink(); }
     const judul = {'CEK': 'CEK - Riwayat Hitung (Casio)', 'LS': 'LS - List Barang', 'RIW': 'RIW - Riwayat Log Step', 'CPS': 'CPS - Copas Teks jadi Step', 'PO': 'PO - Cari PO Tersimpan'};
     Widget isi; double tinggi;
     if (mode == 'CEK') { isi = _panelCek(); tinggi = 250; }
@@ -207,7 +207,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   Widget _panelLS() {
     final q = queryLS.toLowerCase();
     final filtered = daftarBarang.where((b) {
-      if (q.isEmpty) return true;
+      if (q.isEmpty) { return true; }
       return b['nama'].toString().toLowerCase().contains(q) || b['kode'].toString().toLowerCase().contains(q) || b['kategori'].toString().toLowerCase().contains(q);
     }).toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -263,7 +263,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       TextField(controller: _cpsTempelC, maxLines: 3, readOnly: true, showCursor: true, onTap: () => _aktifkanField(_cpsTempelC, 1), decoration: dec('Tempel di sini...')),
       const SizedBox(height: 6),
       Row(children: [
-        Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.paste, size: 18), label: const Text('Tempel Clipboard'), onPressed: () async { final d = await Clipboard.getData(Clipboard.kTextPlain); final t = d?.text ?? ''; if (t.isNotEmpty) setState(() { _cpsTempelC.text = t; }); })),
+        Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.paste, size: 18), label: const Text('Tempel Clipboard'), onPressed: () async { final d = await Clipboard.getData(Clipboard.kTextPlain); final t = d?.text ?? ''; if (t.isNotEmpty) { setState(() { _cpsTempelC.text = t; }); } })),
         const SizedBox(width: 8),
         Expanded(child: ElevatedButton.icon(icon: const Icon(Icons.auto_fix_high, size: 18), label: const Text('Urai jadi Baris'), onPressed: () => setState(() { _cpsBaris = _cpsTempelC.text.split('\n').where((l) => l.trim().isNotEmpty).map((l) => _parseSatuCPS(l)).toList(); }))),
       ]),
@@ -305,20 +305,22 @@ class _S extends ConsumerState<HomeDaftarPO> {
   void _aktifkanField(TextEditingController c, int mode) {
     // Field di panel pakai readOnly, jadi keyboard HP tidak muncul. Ketikan dari tombol bawah
     // masuk ke controller field ini lewat _ketikKeyboard / _hapusKeyboard.
-    setState(() { _ctrlKeyboard = c; _modeKeyboard = mode; if (mode == 1) _qwertyShift = true; });
+    setState(() { _ctrlKeyboard = c; _modeKeyboard = mode; if (mode == 1) { _qwertyShift = true; } });
   }
   void _ketikKeyboard(String s) {
-    final c = _ctrlKeyboard; if (c == null) return;
+    final c = _ctrlKeyboard;
+    if (c == null) { return; }
     final sel = c.selection;
     final text = c.text;
     final start = sel.isValid ? sel.start : text.length;
     final end = sel.isValid ? sel.end : text.length;
     final baru = text.replaceRange(start, end, s);
     c.value = c.value.copyWith(text: baru, selection: TextSelection.collapsed(offset: start + s.length));
-    setState(() { if (identical(c, _lsCariC)) queryLS = baru; if (_modeKeyboard == 1) _qwertyShift = false; });
+    setState(() { if (identical(c, _lsCariC)) { queryLS = baru; } if (_modeKeyboard == 1) { _qwertyShift = false; } });
   }
   void _hapusKeyboard() {
-    final c = _ctrlKeyboard; if (c == null) return;
+    final c = _ctrlKeyboard;
+    if (c == null) { return; }
     final sel = c.selection;
     final text = c.text;
     String baru; int pos;
@@ -327,7 +329,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     else if (text.isNotEmpty) { baru = text.substring(0, text.length - 1); pos = baru.length; }
     else { return; }
     c.value = c.value.copyWith(text: baru, selection: TextSelection.collapsed(offset: pos));
-    setState(() { if (identical(c, _lsCariC)) queryLS = baru; });
+    setState(() { if (identical(c, _lsCariC)) { queryLS = baru; } });
   }
   Widget _tombolKeyboard(String label, {int flex = 1, Color? bg, Color? fg, VoidCallback? onTap}) {
     return Expanded(flex: flex, child: Padding(padding: const EdgeInsets.all(3),
@@ -376,8 +378,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   // Area tombol bawah: Casio default, atau QWERTY / Angka kalau lagi isi field form.
   Widget _areaTombolBawah() {
-    if (_modeKeyboard == 1) return _keyboardQwerty();
-    if (_modeKeyboard == 2) return _keyboardAngka();
+    if (_modeKeyboard == 1) { return _keyboardQwerty(); }
+    if (_modeKeyboard == 2) { return _keyboardAngka(); }
     return Padding(padding: const EdgeInsets.fromLTRB(10, 18, 10, 10), child: Column(children: [
       Expanded(child: Row(children: [tombol('AC', bg: Colors.blue.shade400, fg: Colors.white), tombol('MRC', bg: Colors.grey.shade400), tombol('M-', bg: Colors.grey.shade400), tombol('M+', bg: Colors.green, fg: Colors.white, besar: true), tombol('LS', bg: Colors.orange.shade100, besar: true), tombol('CEK', bg: Colors.black, fg: Colors.white), tombol('CPS', bg: Colors.amber, fg: Colors.black), tombol('BEP', bg: Colors.pink, fg: Colors.white)])),
       Expanded(child: Row(children: [tombol('OFF', bg: Colors.blue.shade400, fg: Colors.white), tombol('7'), tombol('8'), tombol('9'), tombol('RIW', bg: Colors.grey.shade300), tombol('MU', bg: Colors.grey.shade300), tombol('MC', bg: Colors.grey.shade300)])),
@@ -402,6 +404,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (harga == 0) harga = hargaAcuan;
     return {'nama': nama, 'qty': qty, 'harga': harga};
   }
+  // ignore: unused_element
   void _bukaCPS() {
     final tempelC = TextEditingController();
     List<Map<String, dynamic>> baris = [];
@@ -409,11 +412,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
       return Padding(padding: EdgeInsets.only(left: 12, right: 12, top: 12, bottom: MediaQuery.of(ctx).viewInsets.bottom + 12), child: SizedBox(height: 560, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('CPS - Copas Teks jadi Step', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx))]), const Text('1 baris = 1 barang. Angka pertama = qty, angka kedua = harga.', style: TextStyle(fontSize: 11, color: Colors.grey)), const SizedBox(height: 8), TextField(controller: tempelC, maxLines: 4, decoration: dec('Tempel di sini...')), const SizedBox(height: 8), Row(children: [Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.paste, size: 18), label: const Text('Tempel Clipboard'), onPressed: () async { final d = await Clipboard.getData(Clipboard.kTextPlain); final t = d?.text ?? ''; if (t.isNotEmpty) setSheet(() { tempelC.text = t; }); })), const SizedBox(width: 8), Expanded(child: ElevatedButton.icon(icon: const Icon(Icons.auto_fix_high, size: 18), label: const Text('Urai jadi Baris'), onPressed: () { setSheet(() { baris = tempelC.text.split('\n').where((l) => l.trim().isNotEmpty).map((l) => _parseSatuCPS(l)).toList(); }); }))]), const SizedBox(height: 8), Expanded(child: baris.isEmpty ? const Center(child: Text('Belum ada baris. Tempel teks lalu pencet Urai jadi Baris.', textAlign: TextAlign.center)) : ListView.builder(itemCount: baris.length, itemBuilder: (_, i) { final r = baris[i]; final jumlah = ((r['qty'] as num?)?.toDouble() ?? 0) * ((r['harga'] as num?)?.toDouble() ?? 0); return Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.all(10), decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Expanded(child: Text('${r['nama']}', style: const TextStyle(fontWeight: FontWeight.bold))), IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () => setSheet(() { baris.removeAt(i); }))]), Text('Qty ${r['qty']} x ${formatRupiah(((r['harga'] as num?)?.toDouble() ?? 0).toInt())} = ${formatRupiah(jumlah.toInt())}', style: const TextStyle(fontSize: 12))])); })), SizedBox(width: double.infinity, child: ElevatedButton.icon(icon: const Icon(Icons.check, size: 18), label: Text('Masukkan ${baris.length} Baris ke CEK'), onPressed: baris.isEmpty ? null : () { for (final r in baris) { final nama = '${r['nama']}'; final qty = (r['qty'] as num?)?.toDouble() ?? 0; final harga = (r['harga'] as num?)?.toDouble() ?? 0; final jumlah = qty * harga; steps.add({'item': '$nama : ${formatHasil(qty)} x ${formatRupiah(harga.toInt())} = ${formatRupiah(jumlah.toInt())}', 'rumus': '$nama : ${formatHasil(qty)} x ${formatRupiah(harga.toInt())} = ${formatRupiah(jumlah.toInt())}', 'harga': harga, 'qty': qty, 'jumlah': jumlah}); } Navigator.pop(ctx); setState(() { layar = formatHasil(totalCek); ekspresi = 'Total CEK = ${formatHasil(totalCek)}'; }); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${baris.length} baris masuk CEK.'))); bukaCek(); }))])));
     }));
   }
+  // ignore: unused_element
   void _bukaRiwayat() {
     showModalBottomSheet(context: context, isScrollControlled: true, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))), builder: (ctx) => StatefulBuilder(builder: (ctx2, setSheet) {
       return Padding(padding: EdgeInsets.only(left: 12, right: 12, top: 12, bottom: MediaQuery.of(ctx).viewInsets.bottom + 12), child: SizedBox(height: 520, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Riwayat - Log Step', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), Row(children: [TextButton.icon(icon: const Icon(Icons.delete_sweep, size: 18), label: const Text('Hapus Semua'), onPressed: () { setSheet(() { steps.clear(); }); setState(() {}); }), IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx))])]), const Text('1 step = 1 subtotal. Tiap hitung / M+ tercatat di CEK dan tampil di sini.', style: TextStyle(fontSize: 11, color: Colors.grey)), const SizedBox(height: 8), Expanded(child: steps.isEmpty ? const Center(child: Text('Belum ada log step. Hitung / pencet = / M+ dulu.', textAlign: TextAlign.center)) : ListView.builder(itemCount: steps.length, itemBuilder: (_, j) { final r = steps[j]; return Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.all(10), decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)), child: Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${r['item']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)), Text('Subtotal ${formatRupiah(((r['jumlah'] as num?)?.toDouble() ?? 0).toInt())}', style: const TextStyle(fontSize: 11, color: Colors.grey))])), IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () { setSheet(() { steps.removeAt(j); }); setState(() {}); })])); }))])));
     }));
   }
+  // ignore: unused_element
   void _bukaCariPO() {
     showModalBottomSheet(context: context, isScrollControlled: true, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))), builder: (ctx) => StatefulBuilder(builder: (ctx2, setSheet) {
       return Padding(padding: EdgeInsets.only(left: 12, right: 12, top: 12, bottom: MediaQuery.of(ctx).viewInsets.bottom + 12), child: SizedBox(height: 480, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('PO - Cari PO Tersimpan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx))]), const SizedBox(height: 8), const Text('PO aktif tampil di panel PO. Tap Buka Panel PO untuk lihat / simpan.', style: TextStyle(fontSize: 11, color: Colors.grey)), const SizedBox(height: 8), SizedBox(width: double.infinity, child: ElevatedButton(onPressed: () { Navigator.pop(ctx); setState(() { poTerbuka = true; }); }, child: const Text('Buka Panel PO'))), const SizedBox(height: 8), Expanded(child: steps.isEmpty ? const Center(child: Text('Belum ada step di PO aktif.')) : ListView.builder(itemCount: steps.length, itemBuilder: (_, j) { final r = steps[j]; return ListTile(title: Text('${r['item']}', style: const TextStyle(fontSize: 13)), subtitle: Text('Subtotal ${formatRupiah(((r['jumlah'] as num?)?.toDouble() ?? 0).toInt())}', style: const TextStyle(fontSize: 11))); }))])));
@@ -490,15 +495,15 @@ class _S extends ConsumerState<HomeDaftarPO> {
   String formatHasil(double v) {
     if (v.isNaN || v.isInfinite) return "E";
     String mentah;
-    if (modeHitung == "ORIGINAL") mentah = v.toStringAsFixed(desimal);
+    if (modeHitung == "ORIGINAL") { mentah = v.toStringAsFixed(desimal); }
     else if (modeRound == "CUT") { final p = desimal == 0 ? 1.0 : _pow10(desimal); final potong = (v * p).truncate() / p; mentah = desimal == 0 ? potong.round().toString() : potong.toStringAsFixed(desimal); }
-    else if (modeRound == "F") mentah = _buangNolBelakang(v.toStringAsFixed(6));
-    else if (desimal == 0) mentah = v.round().toString();
-    else mentah = v.toStringAsFixed(desimal);
+    else if (modeRound == "F") { mentah = _buangNolBelakang(v.toStringAsFixed(6)); }
+    else if (desimal == 0) { mentah = v.round().toString(); }
+    else { mentah = v.toStringAsFixed(desimal); }
     return _groupBacktick(mentah);
   }
-  double _pow10(int n) { double r = 1; for (int i = 0; i < n; i++) r *= 10; return r; }
-  String _buangNolBelakang(String s) { if (!s.contains('.')) return s; while (s.endsWith('0')) s = s.substring(0, s.length - 1); if (s.endsWith('.')) s = s.substring(0, s.length - 1); return s.isEmpty ? "0" : s; }
+  double _pow10(int n) { double r = 1; for (int i = 0; i < n; i++) { r *= 10; } return r; }
+  String _buangNolBelakang(String s) { if (!s.contains('.')) { return s; } while (s.endsWith('0')) { s = s.substring(0, s.length - 1); } if (s.endsWith('.')) { s = s.substring(0, s.length - 1); } return s.isEmpty ? "0" : s; }
   // Operasi dasar Casio: a op b. Bagi 0 -> error, bukan 0 diam-diam.
   double? hitungDasar(double a, String o, double b) {
     if (o == "+") return a + b;
@@ -661,8 +666,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   // ===== TAX / CSM / ADD2 / ROUND — BARU, LACI TERPISAH =====
   double _angkaLayar() => _parseLayar();
-  void _pencetTaxPlus() { final v = _angkaLayar(); final pajak = v * tarifPajak / 100; layar = formatHasil(v + pajak); ekspresi = "${formatHasil(v)} TAX+ ${tarifPajak}% = ${formatHasil(v + pajak)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": v + pajak}); entryBaru = true; }
-  void _pencetTaxMin() { final v = _angkaLayar(); final bersih = v / (1 + tarifPajak / 100); layar = formatHasil(bersih); ekspresi = "${formatHasil(v)} TAX- ${tarifPajak}% = ${formatHasil(bersih)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": bersih}); entryBaru = true; }
+  void _pencetTaxPlus() { final v = _angkaLayar(); final pajak = v * tarifPajak / 100; layar = formatHasil(v + pajak); ekspresi = "${formatHasil(v)} TAX+ $tarifPajak% = ${formatHasil(v + pajak)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": v + pajak}); entryBaru = true; }
+  void _pencetTaxMin() { final v = _angkaLayar(); final bersih = v / (1 + tarifPajak / 100); layar = formatHasil(bersih); ekspresi = "${formatHasil(v)} TAX- $tarifPajak% = ${formatHasil(bersih)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": bersih}); entryBaru = true; }
   void _setTax() { final v = _angkaLayar(); if (v >= 0 && v <= 100) { tarifPajak = v; ekspresi = "SET TAX = ${formatHasil(v)}%"; layar = formatHasil(v); entryBaru = true; } }
   void _pencetCost() { laciCost = _angkaLayar(); ekspresi = "COST = ${formatHasil(laciCost)}"; entryBaru = true; _hitungCSM(); }
   void _pencetSell() { laciSell = _angkaLayar(); ekspresi = "SELL = ${formatHasil(laciSell)}"; entryBaru = true; _hitungCSM(); }
@@ -863,6 +868,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   // ===== BENTUK FISIK CASIO DJ-120 =====
   // Body krem, display hijau LCD 2 baris, tombol 3D: atas datar, bawah bayangan.
   // Tombol angka putih, operator abu, AC/ON biru, M+ hijau, = biru, BEP pink.
+  // ignore: unused_element
   Widget _chipFungsi(String label, Color bg) { return Padding(padding: const EdgeInsets.only(right: 6), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: bg, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), minimumSize: const Size(0, 30)), onPressed: () => pencet(label), child: Text(label == "ROUND" ? "ROUND: $modeRound" : label == "ADD2" ? (modeAdd2 ? "ADD2: ON" : "ADD2: OFF") : label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))); }
   Widget tombol(String label, {Color? bg, Color? fg, bool besar = false}) {
     final isDown = tombolDitekan == label && tekanTombol;
@@ -885,7 +891,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   @override Widget build(BuildContext context) {
     final po = ref.watch(poProvider);
-    final hasil = ref.read(poProvider.notifier).hitungTotal();
     // SUBTOTAL FIX: hitung dari item PO yang sudah benar (qty x harga), bukan dari layar.
     // Kalau provider salah hitung, hitung ulang di sini sebagai pengaman:
     final subtotalAman = po.items.fold<double>(0, (a, it) => a + (it.qty * it.hargaSatuan));
