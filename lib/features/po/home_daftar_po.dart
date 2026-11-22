@@ -1,13 +1,9 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import '../../core/formatter.dart';
 import 'po_provider.dart';
 import 'parse_cepat.dart';
-import 'po_models.dart';
-import '../nota/nota_pdf.dart';
-import '../nota/nota_preview.dart';
 
 class SatuanItem {
   SatuanItem({required String satuan, required this.dasar, required String qty, required String isi, required this.op, required String nominal, String satuanBaru = ''})
@@ -91,11 +87,20 @@ class _S extends ConsumerState<HomeDaftarPO> {
 
   // ===== STRIP TENGAH - dibuka LS/CEK/CPS/RIW/PO, kecuali form tambah barang =====
   bool _stripTengahTerbuka = true;
-  String _tombolKuningAktif = 'LS';
+  String _tombolKuningAktif = ''; // panel form tertutup sampai tombol CEK/LS/RIW/CPS/PO ditekan
+  final TextEditingController _cpsTempelC = TextEditingController();
+  List<Map<String, dynamic>> _cpsBaris = []; // baris hasil urai CPS di panel
+  // KEYBOARD BAWAH: 0 = Casio default, 1 = QWERTY BlackBerry (field teks), 2 = keypad angka (field angka).
+  // Form tambahBarang TIDAK ikut: field-nya tetap pakai keyboard HP seperti semula.
+  int _modeKeyboard = 0;
+  TextEditingController? _ctrlKeyboard; // controller field form yang sedang diisi keyboard bawah
+  bool _qwertyShift = true;
+  final TextEditingController _lsCariC = TextEditingController();
+  Map<int, TextEditingController> _cekEditCtrls = {}; // controller edit jumlah CEK, awet antar rebuild
   bool _diFormTambahBarang = false;
   void _onTapTombolKuning(String tombol) {
     if (_diFormTambahBarang) return;
-    setState(() { _stripTengahTerbuka = true; _tombolKuningAktif = tombol; });
+    setState(() { _stripTengahTerbuka = true; _tombolKuningAktif = (_tombolKuningAktif == tombol) ? '' : tombol; _resetKeyboard(); });
   }
   Widget _tombolStripRapi(String label, Color bg, VoidCallback onTap) {
     final gelap = bg == Colors.black || bg == const Color(0xFF1F2A44) || bg == const Color(0xFF2D7DFF);
@@ -103,7 +108,283 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   Widget _stripTengah() {
     if (!_stripTengahTerbuka) return const SizedBox.shrink();
-    return Container(width: double.infinity, padding: const EdgeInsets.fromLTRB(12, 8, 12, 10), decoration: const BoxDecoration(color: Color(0xFFFAFAF5), border: Border(top: BorderSide(color: Color(0xFF2D7DFF), width: 3), bottom: BorderSide(color: Color(0xFF2EBD5A), width: 3))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [Row(children: [Expanded(child: Text('Mode: $_tombolKuningAktif', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.4, color: Color(0xFF5A5A52)))), GestureDetector(onTap: () => setState(() { _stripTengahTerbuka = false; _tombolKuningAktif = ''; }), child: const Padding(padding: EdgeInsets.only(left: 8), child: Text('Tutup X', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF888888)))))]), const SizedBox(height: 8), Wrap(spacing: 8, runSpacing: 8, children: [_tombolStripRapi('TAX+', Colors.teal, () => pencet('TAX+')), _tombolStripRapi('TAX-', Colors.teal, () => pencet('TAX-')), _tombolStripRapi('SET TAX', const Color(0xFF1F2A44), () => pencet('SET TAX')), _tombolStripRapi('COST', const Color(0xFF2D7DFF), () => pencet('COST')), _tombolStripRapi('SELL', const Color(0xFF2D7DFF), () => pencet('SELL')), _tombolStripRapi('MARGIN', const Color(0xFF2D7DFF), () => pencet('MARGIN')), _tombolStripRapi('CSM CLR', Colors.grey.shade300, () => pencet('CSM CLR')), _tombolStripRapi('ROUND: $modeRound', Colors.amber.shade100, () => pencet('ROUND')), _tombolStripRapi(modeAdd2 ? 'ADD2: ON' : 'ADD2: OFF', Colors.amber.shade100, () => pencet('ADD2')), _tombolStripRapi('GT', Colors.black, () => pencet('GT'))])]));
+    // STRIP ASAL: chip TAX+ sampai ADD2, 1 BARIS, geser kiri-kanan. Tanpa tulisan Mode / LS MODE.
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(color: Color(0xFFFAFAF5), border: Border(bottom: BorderSide(color: Color(0xFF2EBD5A), width: 3))),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            _tombolStripRapi('TAX+', Colors.teal, () => pencet('TAX+')),
+            const SizedBox(width: 8),
+            _tombolStripRapi('TAX-', Colors.teal, () => pencet('TAX-')),
+            const SizedBox(width: 8),
+            _tombolStripRapi('SET TAX', const Color(0xFF1F2A44), () => pencet('SET TAX')),
+            const SizedBox(width: 8),
+            _tombolStripRapi('COST', const Color(0xFF2D7DFF), () => pencet('COST')),
+            const SizedBox(width: 8),
+            _tombolStripRapi('SELL', const Color(0xFF2D7DFF), () => pencet('SELL')),
+            const SizedBox(width: 8),
+            _tombolStripRapi('MARGIN', const Color(0xFF2D7DFF), () => pencet('MARGIN')),
+            const SizedBox(width: 8),
+            _tombolStripRapi('CSM CLR', Colors.grey.shade300, () => pencet('CSM CLR')),
+            const SizedBox(width: 8),
+            _tombolStripRapi('ROUND: $modeRound', Colors.amber.shade100, () => pencet('ROUND')),
+            const SizedBox(width: 8),
+            _tombolStripRapi(modeAdd2 ? 'ADD2: ON' : 'ADD2: OFF', Colors.amber.shade100, () => pencet('ADD2')),
+            const SizedBox(width: 8),
+            _tombolStripRapi('GT', Colors.black, () => pencet('GT')),
+            const SizedBox(width: 8),
+            _tombolStripRapi('✕', Colors.grey.shade300, () => setState(() { _stripTengahTerbuka = false; })),
+          ],
+        ),
+      ),
+    );
+  }
+  // ===== PANEL FORM DI BAWAH LAYAR KALKULATOR (GARIS BIRU) =====
+  // Isi panel ganti sesuai tombol kuning yang ditekan:
+  // CEK -> form CEK, LS -> form LS, RIW -> form RIW, CPS -> form CPS, PO -> form PO.
+  // Tap tombol yang sama 2x = tutup panel. Strip TAX+..ADD2 di bawah panel ini TIDAK ikut berubah.
+  Widget _panelForm() {
+    final mode = _tombolKuningAktif;
+    if (mode.isEmpty) return const SizedBox.shrink();
+    const judul = {'CEK': 'CEK - Riwayat Hitung (Casio)', 'LS': 'LS - List Barang', 'RIW': 'RIW - Riwayat Log Step', 'CPS': 'CPS - Copas Teks jadi Step', 'PO': 'PO - Cari PO Tersimpan'};
+    Widget isi; double tinggi;
+    if (mode == 'CEK') { isi = _panelCek(); tinggi = 250; }
+    else if (mode == 'LS') { isi = _panelLS(); tinggi = 250; }
+    else if (mode == 'RIW') { isi = _panelRiw(); tinggi = 250; }
+    else if (mode == 'CPS') { isi = _panelCps(); tinggi = 290; }
+    else { isi = _panelPO(); tinggi = 240; }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      decoration: const BoxDecoration(color: Color(0xFFFAFAF5), border: Border(top: BorderSide(color: Color(0xFF2D7DFF), width: 3), bottom: BorderSide(color: Color(0xFF2EBD5A), width: 3))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(judul[mode] ?? mode, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          GestureDetector(onTap: () => setState(() { _tombolKuningAktif = ''; _resetKeyboard(); }), child: const Padding(padding: EdgeInsets.all(4), child: Text('Tutup X', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF888888))))),
+        ]),
+        const SizedBox(height: 6),
+        SizedBox(height: tinggi, child: isi),
+      ]),
+    );
+  }
+
+  // FORM CEK di panel: total bar + edit jumlah per step + hapus step.
+  // Field jumlah = ANGKA -> tap field, tombol bawah jadi keypad angka (bukan keyboard HP).
+  Widget _panelCek() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(width: double.infinity, padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8)), child: Text('TOTAL CEK = ${formatHasil(totalCek)}  |  GT = ${formatHasil(grandTotal)}  |  TAX = ${formatHasil(tarifPajak)}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
+      const SizedBox(height: 8),
+      if (steps.isEmpty) const Text('Belum ada step. Pencet = dulu.'),
+      if (steps.isNotEmpty) Expanded(child: ListView.builder(itemCount: steps.length, itemBuilder: (_, i) {
+        final st = steps[i];
+        // Controller awet per index: kalau dibuat baru tiap build, ketikan keyboard bawah hilang saat rebuild.
+        // Kalau jumlah step berubah (tambah/hapus), map dibangun ulang dari step supaya index tidak geser.
+        if (_cekEditCtrls.length != steps.length) { _cekEditCtrls = {for (var e in steps.asMap().entries) e.key: TextEditingController(text: '${(e.value['jumlah'] as num?)?.toDouble() ?? 0}')}; }
+        final ctrl = _cekEditCtrls[i]!;
+        return Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${st['rumus'] ?? st['item']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Row(children: [
+              Expanded(child: TextField(controller: ctrl, readOnly: true, showCursor: true, keyboardType: TextInputType.number, onTap: () => _aktifkanField(ctrl, 2), decoration: const InputDecoration(labelText: 'Edit jumlah step ini', isDense: true, border: OutlineInputBorder()))),
+              const SizedBox(width: 6),
+              ElevatedButton(onPressed: () { final v = double.tryParse(ctrl.text) ?? 0; setState(() { _editStepCek(i, v); _resetKeyboard(); }); }, child: const Text('SIMPAN')),
+              IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 20), onPressed: () => setState(() { _hapusStepCek(i); })),
+            ]),
+          ]));
+      })),
+    ]);
+  }
+
+  // FORM LS di panel: cari + list barang + tap pilih + Tambah Barang.
+  // Field cari = TEKS -> tap field, tombol bawah jadi keyboard QWERTY BlackBerry.
+  Widget _panelLS() {
+    final q = queryLS.toLowerCase();
+    final filtered = daftarBarang.where((b) {
+      if (q.isEmpty) return true;
+      return b['nama'].toString().toLowerCase().contains(q) || b['kode'].toString().toLowerCase().contains(q) || b['kategori'].toString().toLowerCase().contains(q);
+    }).toList();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(child: TextField(controller: _lsCariC, readOnly: true, showCursor: true, onTap: () => _aktifkanField(_lsCariC, 1), decoration: dec('Cari kode / nama / kategori...'), onChanged: (v) => setState(() { queryLS = v; }))),
+        const SizedBox(width: 8),
+        TextButton(onPressed: () { bukaFormTambahBarang(); }, child: const Text('+ Tambah Barang')),
+      ]),
+      const SizedBox(height: 8),
+      if (filtered.isEmpty) const Center(child: Text('Belum ada barang. Tap + Tambah Barang.')),
+      if (filtered.isNotEmpty) Expanded(child: ListView.builder(itemCount: filtered.length, itemBuilder: (_, i) {
+        final b = filtered[i];
+        final aktif = barangDipilih != null && barangDipilih!['kode'] == b['kode'];
+        final satuanBarang = (b['satuanList'] as List?) ?? [];
+        return InkWell(
+          onTap: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': b['harga1'].toString()}; _tombolKuningAktif = ''; _resetKeyboard(); }),
+          child: Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: BoxDecoration(color: aktif ? Colors.green.shade100 : Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [CircleAvatar(radius: 16, child: Text(b['nama'].toString().isEmpty ? '?' : b['nama'].toString()[0].toLowerCase(), style: const TextStyle(fontSize: 14))), const SizedBox(width: 8), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${b['nama']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis), Text('${b['kode']} • ${b['kategori']} • ${b['satuan'] ?? 'sak'}', style: const TextStyle(fontSize: 11, color: Colors.grey))]))]),
+              if (satuanBarang.isNotEmpty) ...[const SizedBox(height: 6), Wrap(spacing: 4, runSpacing: 4, children: satuanBarang.map<Widget>((x) { final m = Map<String, dynamic>.from(x as Map); final nom = double.tryParse(m['nominal'].toString()) ?? 0; final labelSatuan = (m['satuanBaru']?.toString().isNotEmpty == true) ? m['satuanBaru'].toString() : m['satuan'].toString(); return ActionChip(label: Text('$labelSatuan - ${formatRupiah(nom.toInt())}', style: const TextStyle(fontSize: 10)), onPressed: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': b['harga1'].toString()}; _tombolKuningAktif = ''; _resetKeyboard(); })); }).toList())],
+            ])),
+        );
+      })),
+    ]);
+  }
+
+  // FORM RIW di panel: hapus semua + hapus 1 step. (Tidak ada field input, tombol bawah tetap Casio.)
+  Widget _panelRiw() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Expanded(child: Text('1 step = 1 subtotal. Tiap hitung / M+ tercatat di CEK dan tampil di sini.', style: TextStyle(fontSize: 11, color: Colors.grey))),
+        TextButton.icon(icon: const Icon(Icons.delete_sweep, size: 18), label: const Text('Hapus Semua'), onPressed: () => setState(() { steps.clear(); })),
+      ]),
+      const SizedBox(height: 8),
+      if (steps.isEmpty) const Center(child: Text('Belum ada log step. Hitung / pencet = / M+ dulu.', textAlign: TextAlign.center)),
+      if (steps.isNotEmpty) Expanded(child: ListView.builder(itemCount: steps.length, itemBuilder: (_, j) {
+        final r = steps[j];
+        return Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.all(10), decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+          child: Row(children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${r['item']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)), Text('Subtotal ${formatRupiah(((r['jumlah'] as num?)?.toDouble() ?? 0).toInt())}', style: const TextStyle(fontSize: 11))])),
+            IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () => setState(() { steps.removeAt(j); })),
+          ]));
+      })),
+    ]);
+  }
+
+  // FORM CPS di panel: tempel teks, urai, masukkan ke CEK.
+  // Field tempel = TEKS -> tap field, tombol bawah jadi keyboard QWERTY BlackBerry.
+  Widget _panelCps() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('1 baris = 1 barang. Angka pertama = qty, angka kedua = harga.', style: TextStyle(fontSize: 11, color: Colors.grey)),
+      const SizedBox(height: 6),
+      TextField(controller: _cpsTempelC, maxLines: 3, readOnly: true, showCursor: true, onTap: () => _aktifkanField(_cpsTempelC, 1), decoration: dec('Tempel di sini...')),
+      const SizedBox(height: 6),
+      Row(children: [
+        Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.paste, size: 18), label: const Text('Tempel Clipboard'), onPressed: () async { final d = await Clipboard.getData(Clipboard.kTextPlain); final t = d?.text ?? ''; if (t.isNotEmpty) setState(() { _cpsTempelC.text = t; }); })),
+        const SizedBox(width: 8),
+        Expanded(child: ElevatedButton.icon(icon: const Icon(Icons.auto_fix_high, size: 18), label: const Text('Urai jadi Baris'), onPressed: () => setState(() { _cpsBaris = _cpsTempelC.text.split('\n').where((l) => l.trim().isNotEmpty).map((l) => _parseSatuCPS(l)).toList(); }))),
+      ]),
+      const SizedBox(height: 6),
+      if (_cpsBaris.isEmpty) const Text('Belum ada baris. Tempel teks lalu pencet Urai jadi Baris.', textAlign: TextAlign.center),
+      if (_cpsBaris.isNotEmpty) Expanded(child: ListView.builder(itemCount: _cpsBaris.length, itemBuilder: (_, i) {
+        final r = _cpsBaris[i];
+        final jumlah = ((r['qty'] as num?)?.toDouble() ?? 0) * ((r['harga'] as num?)?.toDouble() ?? 0);
+        return Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.all(10), decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+          child: Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${r['nama']}', style: const TextStyle(fontWeight: FontWeight.bold)), Text('Qty ${r['qty']} x ${formatRupiah(((r['harga'] as num?)?.toDouble() ?? 0).toInt())} = ${formatRupiah(jumlah.toInt())}', style: const TextStyle(fontSize: 12))])), IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () => setState(() { _cpsBaris.removeAt(i); }))]));
+      })),
+      const SizedBox(height: 6),
+      SizedBox(width: double.infinity, child: ElevatedButton.icon(icon: const Icon(Icons.check, size: 18), label: Text('Masukkan ${_cpsBaris.length} Baris ke CEK'), onPressed: _cpsBaris.isEmpty ? null : () {
+        for (final r in _cpsBaris) { final nama = '${r['nama']}'; final qty = (r['qty'] as num?)?.toDouble() ?? 0; final harga = (r['harga'] as num?)?.toDouble() ?? 0; final jumlah = qty * harga; steps.add({'item': '$nama : ${formatHasil(qty)} x ${formatRupiah(harga.toInt())} = ${formatRupiah(jumlah.toInt())}', 'rumus': '$nama : ${formatHasil(qty)} x ${formatRupiah(harga.toInt())} = ${formatRupiah(jumlah.toInt())}', 'harga': harga, 'qty': qty, 'jumlah': jumlah}); }
+        final n = _cpsBaris.length;
+        setState(() { _cpsBaris = []; _cpsTempelC.clear(); layar = formatHasil(totalCek); ekspresi = 'Total CEK = ${formatHasil(totalCek)}'; _tombolKuningAktif = 'CEK'; _resetKeyboard(); });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$n baris masuk CEK.')));
+      })),
+    ]);
+  }
+
+  // FORM PO di panel: tombol buka panel PO + daftar step PO aktif.
+  Widget _panelPO() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('PO aktif tampil di panel PO. Tap Buka Panel PO untuk lihat / simpan.', style: TextStyle(fontSize: 11, color: Colors.grey)),
+      const SizedBox(height: 8),
+      SizedBox(width: double.infinity, child: ElevatedButton(onPressed: () => setState(() { poTerbuka = true; _tombolKuningAktif = ''; _resetKeyboard(); }), child: const Text('Buka Panel PO'))),
+      const SizedBox(height: 8),
+      if (steps.isEmpty) const Center(child: Text('Belum ada step di PO aktif.')),
+      if (steps.isNotEmpty) Expanded(child: ListView.builder(itemCount: steps.length, itemBuilder: (_, j) {
+        final r = steps[j];
+        return ListTile(title: Text('${r['item']}', style: const TextStyle(fontSize: 13)), subtitle: Text('Subtotal ${formatRupiah(((r['jumlah'] as num?)?.toDouble() ?? 0).toInt())}', style: const TextStyle(fontSize: 11)));
+      })),
+    ]);
+  }
+
+  // ===== KEYBOARD BAWAH: Casio / QWERTY BlackBerry / Angka =====
+  void _resetKeyboard() { _modeKeyboard = 0; _ctrlKeyboard = null; _qwertyShift = true; }
+  void _aktifkanField(TextEditingController c, int mode) {
+    // Field di panel pakai readOnly, jadi keyboard HP tidak muncul. Ketikan dari tombol bawah
+    // masuk ke controller field ini lewat _ketikKeyboard / _hapusKeyboard.
+    setState(() { _ctrlKeyboard = c; _modeKeyboard = mode; if (mode == 1) _qwertyShift = true; });
+  }
+  void _ketikKeyboard(String s) {
+    final c = _ctrlKeyboard; if (c == null) return;
+    final sel = c.selection;
+    final text = c.text;
+    final start = sel.isValid ? sel.start : text.length;
+    final end = sel.isValid ? sel.end : text.length;
+    final baru = text.replaceRange(start, end, s);
+    c.value = c.value.copyWith(text: baru, selection: TextSelection.collapsed(offset: start + s.length));
+    setState(() { if (identical(c, _lsCariC)) queryLS = baru; if (_modeKeyboard == 1) _qwertyShift = false; });
+  }
+  void _hapusKeyboard() {
+    final c = _ctrlKeyboard; if (c == null) return;
+    final sel = c.selection;
+    final text = c.text;
+    String baru; int pos;
+    if (sel.isValid && sel.start != sel.end) { baru = text.replaceRange(sel.start, sel.end, ''); pos = sel.start; }
+    else if (sel.isValid && sel.start > 0) { baru = text.replaceRange(sel.start - 1, sel.start, ''); pos = sel.start - 1; }
+    else if (text.isNotEmpty) { baru = text.substring(0, text.length - 1); pos = baru.length; }
+    else { return; }
+    c.value = c.value.copyWith(text: baru, selection: TextSelection.collapsed(offset: pos));
+    setState(() { if (identical(c, _lsCariC)) queryLS = baru; });
+  }
+  Widget _tombolKeyboard(String label, {int flex = 1, Color? bg, Color? fg, VoidCallback? onTap}) {
+    return Expanded(flex: flex, child: Padding(padding: const EdgeInsets.all(3),
+      child: GestureDetector(onTap: onTap,
+        child: Container(height: 48, decoration: BoxDecoration(color: bg ?? Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26), boxShadow: const [BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 3), blurRadius: 0)]),
+          child: Center(child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg ?? Colors.black)))))));
+  }
+  Widget _barisQwerty(List<String> keys) {
+    return Expanded(child: Row(children: [for (final k in keys) _tombolKeyboard(_qwertyShift ? k.toUpperCase() : k.toLowerCase(), onTap: () => _ketikKeyboard(_qwertyShift ? k.toUpperCase() : k.toLowerCase()))]));
+  }
+  // Keyboard QWERTY ala BlackBerry: QWERTYUIOP / ASDFGHJKL / Shift+ZXCVBNM+⌫ / 123+Spasi+.+⏎+CASIO
+  Widget _keyboardQwerty() {
+    return Padding(padding: const EdgeInsets.fromLTRB(10, 10, 10, 10), child: Column(children: [
+      _barisQwerty(['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P']),
+      _barisQwerty(['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L']),
+      Expanded(child: Row(children: [
+        _tombolKeyboard('⇧', bg: _qwertyShift ? Colors.blue.shade200 : Colors.grey.shade300, onTap: () => setState(() { _qwertyShift = !_qwertyShift; })),
+        for (final k in ['Z', 'X', 'C', 'V', 'B', 'N', 'M']) _tombolKeyboard(_qwertyShift ? k : k.toLowerCase(), onTap: () => _ketikKeyboard(_qwertyShift ? k : k.toLowerCase())),
+        _tombolKeyboard('⌫', bg: Colors.grey.shade300, onTap: _hapusKeyboard),
+      ])),
+      Expanded(child: Row(children: [
+        _tombolKeyboard('123', bg: Colors.grey.shade300, onTap: () => setState(() { _modeKeyboard = 2; })),
+        _tombolKeyboard('Spasi', flex: 3, onTap: () => _ketikKeyboard(' ')),
+        _tombolKeyboard('.', onTap: () => _ketikKeyboard('.')),
+        _tombolKeyboard('⏎', onTap: () => _ketikKeyboard('\n')),
+        _tombolKeyboard('CASIO', bg: Colors.blue.shade400, fg: Colors.white, onTap: () => setState(() { _resetKeyboard(); })),
+      ])),
+    ]));
+  }
+  // Keypad angka untuk field angka di form (misal edit jumlah CEK): angka + titik + minus + hapus.
+  Widget _keyboardAngka() {
+    return Padding(padding: const EdgeInsets.fromLTRB(10, 10, 10, 10), child: Column(children: [
+      for (final baris in [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9']])
+        Expanded(child: Row(children: [for (final k in baris) _tombolKeyboard(k, onTap: () => _ketikKeyboard(k))])),
+      Expanded(child: Row(children: [
+        _tombolKeyboard('−', onTap: () => _ketikKeyboard('-')),
+        _tombolKeyboard('0', onTap: () => _ketikKeyboard('0')),
+        _tombolKeyboard('⌫', bg: Colors.grey.shade300, onTap: _hapusKeyboard),
+      ])),
+      Expanded(child: Row(children: [
+        _tombolKeyboard('ABC', bg: Colors.grey.shade300, onTap: () => setState(() { _modeKeyboard = 1; })),
+        _tombolKeyboard('.', onTap: () => _ketikKeyboard('.')),
+        _tombolKeyboard('CASIO', bg: Colors.blue.shade400, fg: Colors.white, onTap: () => setState(() { _resetKeyboard(); })),
+      ])),
+    ]));
+  }
+  // Area tombol bawah: Casio default, atau QWERTY / Angka kalau lagi isi field form.
+  Widget _areaTombolBawah() {
+    if (_modeKeyboard == 1) return _keyboardQwerty();
+    if (_modeKeyboard == 2) return _keyboardAngka();
+    return Padding(padding: const EdgeInsets.fromLTRB(10, 18, 10, 10), child: Column(children: [
+      Expanded(child: Row(children: [tombol('AC', bg: Colors.blue.shade400, fg: Colors.white), tombol('MRC', bg: Colors.grey.shade400), tombol('M-', bg: Colors.grey.shade400), tombol('M+', bg: Colors.green, fg: Colors.white, besar: true), tombol('LS', bg: Colors.orange.shade100, besar: true), tombol('CEK', bg: Colors.black, fg: Colors.white), tombol('CPS', bg: Colors.amber, fg: Colors.black), tombol('BEP', bg: Colors.pink, fg: Colors.white)])),
+      Expanded(child: Row(children: [tombol('OFF', bg: Colors.blue.shade400, fg: Colors.white), tombol('7'), tombol('8'), tombol('9'), tombol('RIW', bg: Colors.grey.shade300), tombol('MU', bg: Colors.grey.shade300), tombol('MC', bg: Colors.grey.shade300)])),
+      Expanded(child: Row(children: [tombol('%', bg: Colors.grey.shade300), tombol('4'), tombol('5'), tombol('6'), tombol('-', bg: Colors.grey.shade300), tombol('÷', bg: Colors.grey.shade300), tombol('MR', bg: Colors.grey.shade300)])),
+      Expanded(child: Row(children: [tombol('+/-', bg: Colors.grey.shade300), tombol('1'), tombol('2'), tombol('3'), tombol('+', bg: Colors.grey.shade300), tombol('x', bg: Colors.grey.shade300), tombol('PO', bg: Colors.teal, fg: Colors.white)])),
+      Expanded(child: Row(children: [tombol('ON/C', bg: Colors.blue.shade400, fg: Colors.white), tombol('0'), tombol('00'), tombol('.'), tombol('=', bg: Colors.blue, fg: Colors.white, besar: true), tombol('M+', bg: Colors.green, fg: Colors.white), tombol('⌫', bg: Colors.grey.shade300)])),
+    ]));
   }
   Map<String, dynamic> _parseSatuCPS(String mentah) {
     final teks = mentah.replaceAll('`', '').replaceAll(RegExp(r'[Rr][Pp]'), '');
@@ -164,9 +445,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
   String modeHitung = "PEMBULATAN";
   int desimal = 0;
   final List<Map<String, dynamic>> steps = [];
-  // Cache pelanggan untuk WA / Nota: ditanya 1x lewat dialog kecil, dipakai tombol berikutnya.
-  String namaPelangganTerakhir = "";
-  String nomorWATerakhir = "";
   double get hargaAcuan {
     if (barangDipilih != null) return double.tryParse("${barangDipilih!["harga1"]}") ?? 0;
     return 0;
@@ -210,44 +488,17 @@ class _S extends ConsumerState<HomeDaftarPO> {
     return neg ? "-$hasil" : hasil;
   }
   String formatHasil(double v) {
-    if (v.isNaN || v.isInfinite) {
-      return "E";
-    }
+    if (v.isNaN || v.isInfinite) return "E";
     String mentah;
-    if (modeHitung == "ORIGINAL") {
-      mentah = v.toStringAsFixed(desimal);
-    } else if (modeRound == "CUT") {
-      final p = desimal == 0 ? 1.0 : _pow10(desimal);
-      final potong = (v * p).truncate() / p;
-      mentah = desimal == 0 ? potong.round().toString() : potong.toStringAsFixed(desimal);
-    } else if (modeRound == "F") {
-      mentah = _buangNolBelakang(v.toStringAsFixed(6));
-    } else if (desimal == 0) {
-      mentah = v.round().toString();
-    } else {
-      mentah = v.toStringAsFixed(desimal);
-    }
+    if (modeHitung == "ORIGINAL") mentah = v.toStringAsFixed(desimal);
+    else if (modeRound == "CUT") { final p = desimal == 0 ? 1.0 : _pow10(desimal); final potong = (v * p).truncate() / p; mentah = desimal == 0 ? potong.round().toString() : potong.toStringAsFixed(desimal); }
+    else if (modeRound == "F") mentah = _buangNolBelakang(v.toStringAsFixed(6));
+    else if (desimal == 0) mentah = v.round().toString();
+    else mentah = v.toStringAsFixed(desimal);
     return _groupBacktick(mentah);
   }
-  double _pow10(int n) {
-    double r = 1;
-    for (int i = 0; i < n; i++) {
-      r *= 10;
-    }
-    return r;
-  }
-  String _buangNolBelakang(String s) {
-    if (!s.contains('.')) {
-      return s;
-    }
-    while (s.endsWith('0')) {
-      s = s.substring(0, s.length - 1);
-    }
-    if (s.endsWith('.')) {
-      s = s.substring(0, s.length - 1);
-    }
-    return s.isEmpty ? "0" : s;
-  }
+  double _pow10(int n) { double r = 1; for (int i = 0; i < n; i++) r *= 10; return r; }
+  String _buangNolBelakang(String s) { if (!s.contains('.')) return s; while (s.endsWith('0')) s = s.substring(0, s.length - 1); if (s.endsWith('.')) s = s.substring(0, s.length - 1); return s.isEmpty ? "0" : s; }
   // Operasi dasar Casio: a op b. Bagi 0 -> error, bukan 0 diam-diam.
   double? hitungDasar(double a, String o, double b) {
     if (o == "+") return a + b;
@@ -410,8 +661,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   // ===== TAX / CSM / ADD2 / ROUND — BARU, LACI TERPISAH =====
   double _angkaLayar() => _parseLayar();
-  void _pencetTaxPlus() { final v = _angkaLayar(); final pajak = v * tarifPajak / 100; layar = formatHasil(v + pajak); ekspresi = "${formatHasil(v)} TAX+ $tarifPajak% = ${formatHasil(v + pajak)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": v + pajak}); entryBaru = true; }
-  void _pencetTaxMin() { final v = _angkaLayar(); final bersih = v / (1 + tarifPajak / 100); layar = formatHasil(bersih); ekspresi = "${formatHasil(v)} TAX- $tarifPajak% = ${formatHasil(bersih)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": bersih}); entryBaru = true; }
+  void _pencetTaxPlus() { final v = _angkaLayar(); final pajak = v * tarifPajak / 100; layar = formatHasil(v + pajak); ekspresi = "${formatHasil(v)} TAX+ ${tarifPajak}% = ${formatHasil(v + pajak)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": v + pajak}); entryBaru = true; }
+  void _pencetTaxMin() { final v = _angkaLayar(); final bersih = v / (1 + tarifPajak / 100); layar = formatHasil(bersih); ekspresi = "${formatHasil(v)} TAX- ${tarifPajak}% = ${formatHasil(bersih)}"; steps.add({"item": ekspresi, "rumus": ekspresi, "harga": v, "qty": tarifPajak, "jumlah": bersih}); entryBaru = true; }
   void _setTax() { final v = _angkaLayar(); if (v >= 0 && v <= 100) { tarifPajak = v; ekspresi = "SET TAX = ${formatHasil(v)}%"; layar = formatHasil(v); entryBaru = true; } }
   void _pencetCost() { laciCost = _angkaLayar(); ekspresi = "COST = ${formatHasil(laciCost)}"; entryBaru = true; _hitungCSM(); }
   void _pencetSell() { laciSell = _angkaLayar(); ekspresi = "SELL = ${formatHasil(laciSell)}"; entryBaru = true; _hitungCSM(); }
@@ -442,11 +693,11 @@ class _S extends ConsumerState<HomeDaftarPO> {
         layar = "0"; entryBaru = true; adaError = false;
       }
       else if (t == "OFF") { layar = "0"; ekspresi = ""; entryBaru = true; }
-      else if (t == "PO") { _onTapTombolKuning('PO'); _bukaCariPO(); }
-      else if (t == "LS") { _onTapTombolKuning('LS'); bukaListLS(); }
-      else if (t == "CEK") { _onTapTombolKuning('CEK'); bukaCek(); }
-      else if (t == "CPS") { _onTapTombolKuning('CPS'); _bukaCPS(); }
-      else if (t == "RIW") { _onTapTombolKuning('RIW'); _bukaRiwayat(); }
+      else if (t == "PO") { _onTapTombolKuning('PO'); } // form tampil di panel bawah layar, bukan bottom sheet
+      else if (t == "LS") { _onTapTombolKuning('LS'); } // form tampil di panel bawah layar, bukan bottom sheet
+      else if (t == "CEK") { _onTapTombolKuning('CEK'); } // form tampil di panel bawah layar, bukan bottom sheet
+      else if (t == "CPS") { _onTapTombolKuning('CPS'); } // form tampil di panel bawah layar, bukan bottom sheet
+      else if (t == "RIW") { _onTapTombolKuning('RIW'); } // form tampil di panel bawah layar, bukan bottom sheet
       else if (t == "TAX+") { _pencetTaxPlus(); }
       else if (t == "TAX-") { _pencetTaxMin(); }
       else if (t == "SET TAX") { _setTax(); }
@@ -612,6 +863,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   // ===== BENTUK FISIK CASIO DJ-120 =====
   // Body krem, display hijau LCD 2 baris, tombol 3D: atas datar, bawah bayangan.
   // Tombol angka putih, operator abu, AC/ON biru, M+ hijau, = biru, BEP pink.
+  Widget _chipFungsi(String label, Color bg) { return Padding(padding: const EdgeInsets.only(right: 6), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: bg, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), minimumSize: const Size(0, 30)), onPressed: () => pencet(label), child: Text(label == "ROUND" ? "ROUND: $modeRound" : label == "ADD2" ? (modeAdd2 ? "ADD2: ON" : "ADD2: OFF") : label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))); }
   Widget tombol(String label, {Color? bg, Color? fg, bool besar = false}) {
     final isDown = tombolDitekan == label && tekanTombol;
     final baseColor = bg ?? Colors.white;
@@ -631,169 +883,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
       ),
     ));
   }
-
-  // ===== JEMBATAN WA / NOTA -> PoOrder (dipakai nota_pdf.dart + nota_preview.dart) =====
-  // Satu-satunya tempat yang tahu bentuk PoOrder. Disesuaikan dari log CI:
-  // - PoItem.qty dan PoItem.hargaSatuan bertipe int, jadi angka double di-round dulu.
-  // - Customer(...) wajib punya id, jadi id diisi nomor WA (atau CUST-... kalau kosong).
-  PoOrder _poOrderDariLayar({required String nama, required String nomorWA}) {
-    // Sumber item: utamakan poProvider (yang tampil di panel PO). Kalau panel PO
-    // kosong tapi steps kalkulator ada isinya, pakai steps sebagai fallback.
-    final po = ref.read(poProvider);
-    final List<PoItem> items = [];
-    if (po.items.isNotEmpty) {
-      for (final it in po.items) {
-        items.add(PoItem(namaBarang: it.namaBarang, qty: (it.qty as num).round(), hargaSatuan: (it.hargaSatuan as num).round(), diskonItem: 0));
-      }
-    } else {
-      for (final st in steps) {
-        final namaBarang = "${st["item"] ?? ""}";
-        final qty = (st["qty"] as num?)?.toDouble() ?? 1;
-        final harga = (st["harga"] as num?)?.toDouble() ?? 0;
-        if (namaBarang.trim().isNotEmpty && harga > 0) {
-          items.add(PoItem(namaBarang: namaBarang, qty: qty.round(), hargaSatuan: harga.round(), diskonItem: 0));
-        }
-      }
-    }
-    final idPO = "PO-${DateTime.now().millisecondsSinceEpoch}";
-    final idCustomer = nomorWA.trim().isEmpty ? "CUST-${DateTime.now().millisecondsSinceEpoch}" : nomorWA.trim();
-    return PoOrder(
-      id: idPO,
-      tanggal: DateTime.now(),
-      customer: Customer(id: idCustomer, namaOrang: nama.trim().isEmpty ? "Pelanggan" : nama.trim(), nomorWA: nomorWA.trim()),
-      items: items,
-      diskonTotal: 0,
-      ongkir: 0,
-      dp: 0,
-      catatan: "",
-      status: PoStatus.draft,
-    );
-  }
-
-  // Teks WA: isinya SAMA dengan yang tampil di NotaPreview / PDF, jadi tidak
-  // ada 2 versi angka yang beda.
-  String _teksWA(PoOrder po) {
-    final buf = StringBuffer();
-    buf.writeln("TOKO BANGUNAN");
-    buf.writeln("${po.id} - ${formatTanggal(po.tanggal)}");
-    buf.writeln("Customer: ${po.customer.namaOrang} - ${po.customer.nomorWA}");
-    buf.writeln("------------------------------");
-    double subtotal = 0;
-    for (final i in po.items) {
-      final jumlah = i.qty * i.hargaSatuan - i.diskonItem;
-      subtotal += jumlah;
-      buf.writeln("${i.namaBarang} ${i.qty}x = ${formatRupiah(jumlah.toInt())}");
-    }
-    buf.writeln("------------------------------");
-    buf.writeln("Diskon: ${formatRupiah(po.diskonTotal)}");
-    buf.writeln("Ongkir: ${formatRupiah(po.ongkir)}");
-    final total = subtotal - po.diskonTotal + po.ongkir;
-    buf.writeln("TOTAL: ${formatRupiah(total.toInt())}");
-    buf.writeln("DP: ${formatRupiah(po.dp)}");
-    buf.writeln("Sisa Bayar: ${formatRupiah((total - po.dp).toInt())}");
-    if (po.catatan.trim().isNotEmpty) {
-      buf.writeln("Catatan: ${po.catatan}");
-    }
-    buf.writeln("Status: ${po.status.name}");
-    buf.writeln("Terima kasih");
-    return buf.toString();
-  }
-
-  // Dialog kecil: tanya nama + nomor WA 1x, lalu jalankan aksi (WA / Nota).
-  // Prefill dari cache, jadi tombol ke-2 tidak tanya lagi.
-  Future<void> _tanyaPelangganLalu(Future<void> Function(PoOrder po) aksi) async {
-    final po = ref.read(poProvider);
-    if (po.items.isEmpty && steps.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Belum ada item. Pilih barang via LS, ketik qty, lalu M+ dulu.")));
-      return;
-    }
-    final namaC = TextEditingController(text: namaPelangganTerakhir);
-    final waC = TextEditingController(text: nomorWATerakhir);
-    final jadi = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Nama pelanggan"),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: namaC, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: "Nama pelanggan", hintText: "Contoh: Budi")),
-          const SizedBox(height: 8),
-          TextField(controller: waC, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: "Nomor WA (boleh kosong)", hintText: "Contoh: 08123456789")),
-        ]),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Batal")), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Lanjut"))],
-      ),
-    );
-    if (jadi != true) {
-      return;
-    }
-    namaPelangganTerakhir = namaC.text;
-    nomorWATerakhir = waC.text;
-    final order = _poOrderDariLayar(nama: namaC.text, nomorWA: waC.text);
-    await aksi(order);
-  }
-
-  // Tombol hijau "Kirim WA": bikin PDF pakai buatPDFNota(), salin teks nota,
-  // tampilkan teksnya supaya bisa ditempel ke WA. Tanpa dependency baru:
-  // tidak pakai url_launcher / share_plus, jadi tidak perlu tambah pubspec.
-  Future<void> _kirimWA() async {
-    await _tanyaPelangganLalu((po) async {
-      final teks = _teksWA(po);
-      File? pdf;
-      try {
-        pdf = await buatPDFNota(po, Directory.systemTemp);
-      } catch (e) {
-        pdf = null;
-      }
-      await Clipboard.setData(ClipboardData(text: teks));
-      if (!mounted) {
-        return;
-      }
-      await showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text("Kirim WA"),
-          content: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text("Teks nota sudah disalin. Tempel (paste) ke chat WA pelanggan."),
-            if (pdf != null) ...[
-              const SizedBox(height: 8),
-              Text("PDF juga tersimpan di: ${pdf.path}", style: const TextStyle(fontSize: 11, color: Colors.black54)),
-            ],
-            const SizedBox(height: 8),
-            Container(padding: const EdgeInsets.all(8), color: const Color(0xFFF2F2F2), child: SelectableText(teks, style: const TextStyle(fontSize: 12))),
-          ])),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Tutup")),
-            FilledButton(onPressed: () { Clipboard.setData(ClipboardData(text: teks)); Navigator.pop(ctx); }, child: const Text("Salin lagi")),
-          ],
-        ),
-      );
-    });
-  }
-
-  // Tombol putih "Nota": tampilkan NotaPreview (file nota_preview.dart) apa adanya,
-  // tanpa tombol / UI lain di dalamnya, sesuai komentar di file itu.
-  Future<void> _bukaNota() async {
-    await _tanyaPelangganLalu((po) async {
-      if (!mounted) {
-        return;
-      }
-      await showDialog<void>(
-        context: context,
-        builder: (ctx) => Dialog(
-          insetPadding: const EdgeInsets.all(12),
-          child: SingleChildScrollView(child: Column(children: [
-            NotaPreview(po: po),
-            Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 12), child: Row(children: [
-              Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text("Tutup"))),
-              const SizedBox(width: 8),
-              Expanded(child: FilledButton(onPressed: () { Navigator.pop(ctx); _kirimWA(); }, child: const Text("Kirim WA"))),
-            ])),
-          ])),
-        ),
-      );
-    });
-  }
-
   @override Widget build(BuildContext context) {
     final po = ref.watch(poProvider);
+    final hasil = ref.read(poProvider.notifier).hitungTotal();
     // SUBTOTAL FIX: hitung dari item PO yang sudah benar (qty x harga), bukan dari layar.
     // Kalau provider salah hitung, hitung ulang di sini sebagai pengaman:
     final subtotalAman = po.items.fold<double>(0, (a, it) => a + (it.qty * it.hargaSatuan));
@@ -821,15 +913,16 @@ class _S extends ConsumerState<HomeDaftarPO> {
           const SizedBox(width: 4),
           Expanded(child: SizedBox(height: 32, child: SegmentedButton<int>(segments: const [ButtonSegment(value: 0, label: Text("0", style: TextStyle(fontSize: 9))), ButtonSegment(value: 2, label: Text("2", style: TextStyle(fontSize: 9))), ButtonSegment(value: 3, label: Text("3", style: TextStyle(fontSize: 9)))], selected: {desimal}, onSelectionChanged: (s) => setState(() { desimal = s.first; })))),
           const SizedBox(width: 4),
-          Expanded(child: SizedBox(height: 32, child: FilledButton(onPressed: _kirimWA, style: FilledButton.styleFrom(padding: EdgeInsets.zero, textStyle: const TextStyle(fontSize: 10)), child: const Text("Kirim WA")))),
+          Expanded(child: SizedBox(height: 32, child: FilledButton(onPressed: () {}, style: FilledButton.styleFrom(padding: EdgeInsets.zero, textStyle: const TextStyle(fontSize: 10)), child: const Text("Kirim WA")))),
           const SizedBox(width: 4),
-          Expanded(child: SizedBox(height: 32, child: OutlinedButton(onPressed: _bukaNota, style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, textStyle: const TextStyle(fontSize: 9), backgroundColor: Colors.white), child: const Text("Nota")))),
+          Expanded(child: SizedBox(height: 32, child: OutlinedButton(onPressed: () {}, style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, textStyle: const TextStyle(fontSize: 9), backgroundColor: Colors.white), child: const Text("Nota")))),
         ]),
       ]),
     );
     return Scaffold(backgroundColor: const Color(0xFFE8E0C8),
       body: SafeArea(child: Column(children: [
         headerKalkulator,
+        _panelForm(),
         if (poTerbuka)
           Expanded(child: Container(color: const Color(0xFF2E2E2E), padding: const EdgeInsets.all(12),
             child: Column(children: [
@@ -862,15 +955,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           ))
         else
           _stripTengah(),
-        Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(10, 18, 10, 10),
-          child: Column(children: [
-              Expanded(child: Row(children: [tombol("AC", bg: Colors.blue.shade400, fg: Colors.white), tombol("MRC", bg: Colors.grey.shade400), tombol("M-", bg: Colors.grey.shade400), tombol("M+", bg: Colors.green, fg: Colors.white, besar: true), tombol("LS", bg: Colors.orange.shade100, besar: true), tombol("CEK", bg: Colors.black, fg: Colors.white), tombol("CPS", bg: Colors.amber, fg: Colors.black), tombol("BEP", bg: Colors.pink, fg: Colors.white)])),
-              Expanded(child: Row(children: [tombol("OFF", bg: Colors.blue.shade400, fg: Colors.white), tombol("7"), tombol("8"), tombol("9"), tombol("RIW", bg: Colors.grey.shade300), tombol("MU", bg: Colors.grey.shade300), tombol("MC", bg: Colors.grey.shade300)])),
-              Expanded(child: Row(children: [tombol("%", bg: Colors.grey.shade300), tombol("4"), tombol("5"), tombol("6"), tombol("-", bg: Colors.grey.shade300), tombol("÷", bg: Colors.grey.shade300), tombol("MR", bg: Colors.grey.shade300)])),
-              Expanded(child: Row(children: [tombol("+/-", bg: Colors.grey.shade300), tombol("1"), tombol("2"), tombol("3"), tombol("+", bg: Colors.grey.shade300), tombol("x", bg: Colors.grey.shade300), tombol("PO", bg: Colors.teal, fg: Colors.white)])),
-              Expanded(child: Row(children: [tombol("ON/C", bg: Colors.blue.shade400, fg: Colors.white), tombol("0"), tombol("00"), tombol("."), tombol("=", bg: Colors.blue, fg: Colors.white, besar: true), tombol("M+", bg: Colors.green, fg: Colors.white), tombol("⌫", bg: Colors.grey.shade300)])),
-            ]),
-          )),
+        Expanded(child: _areaTombolBawah()),
       ])),
     );
   }
