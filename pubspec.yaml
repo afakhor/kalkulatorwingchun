@@ -33,7 +33,7 @@ dependencies:
 # Kunci archive ke 4.0.7 yang masih punya decodeLazy. Jangan hapus blok ini
 # sampai pdf / image di-upgrade ke versi yang sudah cocok dengan archive baru.
 dependency_overrides:
-  archive: 4.0.7
+  archive: ^3.6.1
 
 dev_dependencies:
   flutter_test:
