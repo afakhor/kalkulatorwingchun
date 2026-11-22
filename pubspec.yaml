@@ -28,6 +28,13 @@ dependencies:
   sqflite: ^2.4.2
   path: ^1.9.1
 
+# FIX BUILD APK: image 4.11.0 (bawaan pdf) manggil ZLibDecoder().decodeLazy(...),
+# tapi archive 4.0.9 sudah menghapus method itu -> build gagal di png_decoder.dart:377.
+# Kunci archive ke 4.0.7 yang masih punya decodeLazy. Jangan hapus blok ini
+# sampai pdf / image di-upgrade ke versi yang sudah cocok dengan archive baru.
+dependency_overrides:
+  archive: 4.0.7
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
