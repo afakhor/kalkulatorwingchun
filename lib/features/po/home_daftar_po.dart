@@ -738,7 +738,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
         child: Container(height: 48, decoration: BoxDecoration(color: bg ?? Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26), boxShadow: const [BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 3), blurRadius: 0)]),
           child: Center(child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg ?? Colors.black)))))));
   }
-  // Tombol BASKORO WINGCHUN di keypad (ganti tombol CEK): BASKORO, garis tengah, WINGCHUN.
+  // Tombol BSKR / garis / WCUN di keypad (ganti tombol CEK, tombol hitam yang dilingkari biru).
+  // BSKR = BASKORO disingkat, WCUN = WINGCHUN disingkat, font 8, garis putih di tengah.
+  // FittedBox scaleDown = kalau teks masih kebesaran, otomatis mengecil sampai muat.
+  // ClipRRect = teks TIDAK BISA keluar tombol, dipotong pas di pinggir tombol.
   // Tap: lagi isi field -> balik ke QWERTY di field yang sama. Tidak lagi isi field -> buka panel CEK.
   void _onTapBaskoroKeypad() {
     if (_ctrlKeyboard != null) {
@@ -751,28 +754,38 @@ class _S extends ConsumerState<HomeDaftarPO> {
     return Expanded(child: Padding(padding: const EdgeInsets.all(3),
       child: GestureDetector(onTap: _onTapBaskoroKeypad,
         child: Container(height: 48, decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26), boxShadow: const [BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 3), blurRadius: 0)]),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Text('BASKORO', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white)),
-            Container(width: 40, height: 2, color: Colors.white, margin: const EdgeInsets.symmetric(vertical: 2)),
-            const Text('WINGCHUN', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white)),
-          ])))));
+          child: ClipRRect(borderRadius: BorderRadius.circular(12),
+            child: FittedBox(fit: BoxFit.scaleDown,
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Text('BSKR', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
+                Container(width: 26, height: 1.5, color: Colors.white, margin: const EdgeInsets.symmetric(vertical: 2)),
+                const Text('WCUN', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
+              ])))))));
   }
 
-  // Tombol BASKORO WINGCHUN: teks dicoret garis tengah. Tap = toggle QWERTY <-> kalkulator.
-  // Field-nya TIDAK dihapus, jadi tap lagi bisa balik ke QWERTY di field yang sama.
+  // Tombol BSKR / garis / WCUN di keyboard QWERTY / simbol / angka (tombol biru pojok kanan bawah).
+  // BSKR = BASKORO disingkat, WCUN = WINGCHUN disingkat, font 8.
+  // FittedBox scaleDown = kalau teks masih kebesaran, otomatis mengecil sampai muat.
+  // ClipRRect = teks TIDAK BISA keluar tombol, dipotong pas di pinggir tombol.
   Widget _tombolBaskoro(VoidCallback onTap) {
     return Expanded(child: Padding(padding: const EdgeInsets.all(3),
       child: GestureDetector(onTap: onTap,
         child: Container(height: 48, decoration: BoxDecoration(color: Colors.blue.shade400, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26), boxShadow: const [BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 3), blurRadius: 0)]),
-          child: const Center(child: Text('BASKORO\nWINGCHUN', textAlign: TextAlign.center, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white, decoration: TextDecoration.lineThrough, decorationThickness: 1.5)))))));
+          child: ClipRRect(borderRadius: BorderRadius.circular(12),
+            child: FittedBox(fit: BoxFit.scaleDown,
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Text('BSKR', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
+                Container(width: 26, height: 1.5, color: Colors.white, margin: const EdgeInsets.symmetric(vertical: 2)),
+                const Text('WCUN', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
+              ])))))));
   }
   // Baris BASKORO WINGCHUN di bawah keypad kalkulator: muncul kalau lagi isi field (habis toggle dari QWERTY).
-  // Tap baris ini = balik ke QWERTY di field yang sama.
+  // Tap baris ini = balik ke QWERTY di field yang sama. FittedBox = teks mengecil sendiri kalau layar sempit.
   Widget _barisBaskoro() {
     return Padding(padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
       child: GestureDetector(onTap: () => setState(() { _modeKeyboard = 1; }),
         child: Container(height: 44, decoration: BoxDecoration(color: Colors.blue.shade400, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26)),
-          child: const Center(child: Text('BASKORO  WINGCHUN', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white, decoration: TextDecoration.lineThrough, decorationThickness: 2))))));
+          child: const Center(child: FittedBox(fit: BoxFit.scaleDown, child: Text('BASKORO  WINGCHUN', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white, decoration: TextDecoration.lineThrough, decorationThickness: 2)))))));
   }
   Widget _barisQwerty(List<String> keys) {
     return Expanded(child: Row(children: [for (final k in keys) _tombolKeyboard(_huruf(k), onTap: () => _ketikKeyboard(_huruf(k)))]));
