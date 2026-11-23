@@ -738,10 +738,11 @@ class _S extends ConsumerState<HomeDaftarPO> {
         child: Container(height: 48, decoration: BoxDecoration(color: bg ?? Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26), boxShadow: const [BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 3), blurRadius: 0)]),
           child: Center(child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg ?? Colors.black)))))));
   }
-  // Tombol BSKR / garis / WCUN di keypad (ganti tombol CEK, tombol hitam yang dilingkari biru).
-  // BSKR = BASKORO disingkat, WCUN = WINGCHUN disingkat, font 8, garis putih di tengah.
-  // FittedBox scaleDown = kalau teks masih kebesaran, otomatis mengecil sampai muat.
-  // ClipRRect = teks TIDAK BISA keluar tombol, dipotong pas di pinggir tombol.
+  // Tombol BSKR / garis / WCUN di keypad (ganti tombol CEK, tombol hitam).
+  // CANGKANG SAMA PERSIS dengan tombol(): Padding 4.0, tinggi double.infinity (mengisi penuh tinggi baris),
+  // radius 14, border 0.8, shadow sama. Bedanya cuma isi (BSKR/garis/WCUN) + warna hitam.
+  // Font 11 (lebih besar dari versi sebelumnya yang 8) biar teksnya mengisi tombol, tetap aman karena
+  // FittedBox scaleDown = kalau kebesaran, otomatis mengecil sampai muat. ClipRRect = teks tidak bisa keluar tombol.
   // Tap: lagi isi field -> balik ke QWERTY di field yang sama. Tidak lagi isi field -> buka panel CEK.
   void _onTapBaskoroKeypad() {
     if (_ctrlKeyboard != null) {
@@ -751,22 +752,23 @@ class _S extends ConsumerState<HomeDaftarPO> {
     }
   }
   Widget _tombolBaskoroKeypad() {
-    return Expanded(child: Padding(padding: const EdgeInsets.all(3),
+    return Expanded(child: Padding(padding: const EdgeInsets.all(4.0),
       child: GestureDetector(onTap: _onTapBaskoroKeypad,
-        child: Container(height: 48, decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26), boxShadow: const [BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 3), blurRadius: 0)]),
-          child: ClipRRect(borderRadius: BorderRadius.circular(12),
+        child: Container(height: double.infinity, decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.black26, width: 0.8),
+            boxShadow: const [BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 4), blurRadius: 0), BoxShadow(color: Colors.white70, offset: Offset(0, -1), blurRadius: 0)],
+          ),
+          child: ClipRRect(borderRadius: BorderRadius.circular(14),
             child: FittedBox(fit: BoxFit.scaleDown,
               child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Text('BSKR', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
-                Container(width: 26, height: 1.5, color: Colors.white, margin: const EdgeInsets.symmetric(vertical: 2)),
-                const Text('WCUN', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
+                const Text('BSKR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
+                Container(width: 30, height: 1.5, color: Colors.white, margin: const EdgeInsets.symmetric(vertical: 3)),
+                const Text('WCUN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
               ])))))));
   }
 
   // Tombol BSKR / garis / WCUN di keyboard QWERTY / simbol / angka (tombol biru pojok kanan bawah).
-  // BSKR = BASKORO disingkat, WCUN = WINGCHUN disingkat, font 8.
-  // FittedBox scaleDown = kalau teks masih kebesaran, otomatis mengecil sampai muat.
-  // ClipRRect = teks TIDAK BISA keluar tombol, dipotong pas di pinggir tombol.
+  // Cangkang SAMA dengan _tombolKeyboard: Padding 3, tinggi 48, radius 12, shadow sama. Bedanya cuma isi + warna biru.
   Widget _tombolBaskoro(VoidCallback onTap) {
     return Expanded(child: Padding(padding: const EdgeInsets.all(3),
       child: GestureDetector(onTap: onTap,
@@ -774,7 +776,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           child: ClipRRect(borderRadius: BorderRadius.circular(12),
             child: FittedBox(fit: BoxFit.scaleDown,
               child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Text('BSKR', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
+                const Text('BSKRO', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
                 Container(width: 26, height: 1.5, color: Colors.white, margin: const EdgeInsets.symmetric(vertical: 2)),
                 const Text('WCUN', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
               ])))))));
