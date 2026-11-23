@@ -740,9 +740,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
         child: Container(height: 48, decoration: BoxDecoration(color: bg ?? Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26), boxShadow: const [BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 3), blurRadius: 0)]),
           child: Center(child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg ?? Colors.black)))))));
   }
-  // Tombol BSKRO / garis / WCUN di keypad (ganti tombol CEK, tombol hitam).
+  // Tombol BSKR / garis / WCUN di keypad (ganti tombol CEK, tombol hitam).
   // CANGKANG SAMA PERSIS dengan tombol(): Padding 4.0, tinggi double.infinity (mengisi penuh tinggi baris),
-  // radius 14, border 0.8, shadow sama. Bedanya cuma isi (BSKRO/garis/WCUN) + warna hitam.
+  // radius 14, border 0.8, shadow sama. Bedanya cuma isi (BSKR/garis/WCUN) + warna hitam.
   // Font 11 biar teksnya mengisi tombol, tetap aman karena FittedBox scaleDown = kalau kebesaran, otomatis mengecil sampai muat. ClipRRect = teks tidak bisa keluar tombol.
   // Tap: SELALU buka panel CEK. Balik ke QWERTY bukan tugas tombol ini, tapi baris biru BASKORO WINGCHUN di bawah keypad.
   void _onTapBaskoroKeypad() {
@@ -758,13 +758,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
           child: ClipRRect(borderRadius: BorderRadius.circular(14),
             child: FittedBox(fit: BoxFit.scaleDown,
               child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Text('BSKRO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
+                const Text('BSKR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
                 Container(width: 30, height: 1.5, color: Colors.white, margin: const EdgeInsets.symmetric(vertical: 3)),
                 const Text('WCUN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
               ])))))));
   }
 
-  // Tombol BSKRO / garis / WCUN di keyboard QWERTY / simbol / angka (tombol biru pojok kanan bawah).
+  // Tombol BSKR / garis / WCUN di keyboard QWERTY / simbol / angka (tombol biru pojok kanan bawah).
   // Cangkang SAMA dengan _tombolKeyboard: Padding 3, tinggi 48, radius 12, shadow sama. Bedanya cuma isi + warna biru.
   Widget _tombolBaskoro(VoidCallback onTap) {
     return Expanded(child: Padding(padding: const EdgeInsets.all(3),
@@ -773,7 +773,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           child: ClipRRect(borderRadius: BorderRadius.circular(12),
             child: FittedBox(fit: BoxFit.scaleDown,
               child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Text('BSKRO', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
+                const Text('BSKR', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
                 Container(width: 26, height: 1.5, color: Colors.white, margin: const EdgeInsets.symmetric(vertical: 2)),
                 const Text('WCUN', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
               ])))))));
