@@ -1302,12 +1302,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
       body: SafeArea(child: Column(children: [
         headerKalkulator,
         _panelForm(),
-        if (poTerbuka)
-          Expanded(child: _panelDaftarItemPO())
-        else
-          _stripTengah(),
-        else
-          _stripTengah(),
+        if (poTerbuka) Expanded(child: _panelDaftarItemPO()),
+        if (!poTerbuka) _stripTengah(),
         Expanded(child: _areaTombolBawah()),
       ])),
     );
