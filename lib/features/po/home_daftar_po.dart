@@ -5,8 +5,8 @@ import '../../core/formatter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../po/po_models.dart';
-import 'nota_pdf.dart';
-import 'nota_preview.dart';
+import '../nota/nota_pdf.dart';
+import '../nota/nota_preview.dart';
 import 'po_provider.dart';
 import 'parse_cepat.dart';
 
