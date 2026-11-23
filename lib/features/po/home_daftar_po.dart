@@ -118,8 +118,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   String? _tagKeyboardAktif; // tag field baris yang sedang diisi keyboard bawah, misal "po-2-qty"
   bool _diFormTambahBarang = false;
   void _onTapTombolKuning(String tombol) {
-    if (_diFormTambahBarang) return;
-    setState(() { _stripTengahTerbuka = true; _tombolKuningAktif = (_tombolKuningAktif == tombol) ? '' : tombol; _resetKeyboard(); });
+    if (_diFormTambahBarang) return; // flag dibalik false di .then() showModalBottomSheet bukaFormTambahBarang()
+    setState(() { _stripTengahTerbuka = true; _tombolKuningAktif = (_tombolKuningAktif == tombol) ? '' : tombol; poTerbuka = false; _resetKeyboard(); }); // tombol kuning = tutup Daftar Item, tampilkan panelnya sendiri, jangan numpuk
   }
   Widget _tombolStripRapi(String label, Color bg, VoidCallback onTap) {
     final gelap = bg == Colors.black || bg == const Color(0xFF1F2A44) || bg == const Color(0xFF2D7DFF);
@@ -555,6 +555,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('Tap ✎ untuk revisi PO di panel PO. Tap 🗑 untuk hapus PO tersimpan.', style: TextStyle(fontSize: 11, color: Colors.grey)),
       const SizedBox(height: 8),
+      SizedBox(width: double.infinity, child: OutlinedButton.icon(icon: const Icon(Icons.list_alt, size: 18), label: const Text('Lihat PO Aktif (Daftar Item)'), onPressed: () => setState(() { poTerbuka = true; _tombolKuningAktif = ''; _resetKeyboard(); }))),
+      const SizedBox(height: 8),
       if (_poTersimpan.isEmpty) const Center(child: Text('Belum ada PO tersimpan.\nSimpan dari panel PO (icon 💾).', textAlign: TextAlign.center)),
       if (_poTersimpan.isNotEmpty) Expanded(child: ListView.builder(itemCount: _poTersimpan.length, itemBuilder: (_, i) {
         final pp = _poTersimpan[i];
@@ -738,18 +740,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
         child: Container(height: 48, decoration: BoxDecoration(color: bg ?? Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26), boxShadow: const [BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 3), blurRadius: 0)]),
           child: Center(child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg ?? Colors.black)))))));
   }
-  // Tombol BSKR / garis / WCUN di keypad (ganti tombol CEK, tombol hitam).
+  // Tombol BSKRO / garis / WCUN di keypad (ganti tombol CEK, tombol hitam).
   // CANGKANG SAMA PERSIS dengan tombol(): Padding 4.0, tinggi double.infinity (mengisi penuh tinggi baris),
-  // radius 14, border 0.8, shadow sama. Bedanya cuma isi (BSKR/garis/WCUN) + warna hitam.
-  // Font 11 (lebih besar dari versi sebelumnya yang 8) biar teksnya mengisi tombol, tetap aman karena
-  // FittedBox scaleDown = kalau kebesaran, otomatis mengecil sampai muat. ClipRRect = teks tidak bisa keluar tombol.
-  // Tap: lagi isi field -> balik ke QWERTY di field yang sama. Tidak lagi isi field -> buka panel CEK.
+  // radius 14, border 0.8, shadow sama. Bedanya cuma isi (BSKRO/garis/WCUN) + warna hitam.
+  // Font 11 biar teksnya mengisi tombol, tetap aman karena FittedBox scaleDown = kalau kebesaran, otomatis mengecil sampai muat. ClipRRect = teks tidak bisa keluar tombol.
+  // Tap: SELALU buka panel CEK. Balik ke QWERTY bukan tugas tombol ini, tapi baris biru BASKORO WINGCHUN di bawah keypad.
   void _onTapBaskoroKeypad() {
-    if (_ctrlKeyboard != null) {
-      setState(() { _modeKeyboard = 1; });
-    } else {
-      _onTapTombolKuning('CEK');
-    }
+    _onTapTombolKuning('CEK');
   }
   Widget _tombolBaskoroKeypad() {
     return Expanded(child: Padding(padding: const EdgeInsets.all(4.0),
@@ -761,13 +758,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
           child: ClipRRect(borderRadius: BorderRadius.circular(14),
             child: FittedBox(fit: BoxFit.scaleDown,
               child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Text('BSKR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
+                const Text('BSKRO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
                 Container(width: 30, height: 1.5, color: Colors.white, margin: const EdgeInsets.symmetric(vertical: 3)),
                 const Text('WCUN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
               ])))))));
   }
 
-  // Tombol BSKR / garis / WCUN di keyboard QWERTY / simbol / angka (tombol biru pojok kanan bawah).
+  // Tombol BSKRO / garis / WCUN di keyboard QWERTY / simbol / angka (tombol biru pojok kanan bawah).
   // Cangkang SAMA dengan _tombolKeyboard: Padding 3, tinggi 48, radius 12, shadow sama. Bedanya cuma isi + warna biru.
   Widget _tombolBaskoro(VoidCallback onTap) {
     return Expanded(child: Padding(padding: const EdgeInsets.all(3),
@@ -1166,6 +1163,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
           if (it != null) { ref.read(poProvider.notifier).tambahItem(it); }
           steps.add({"item": "${barangDipilih!["nama"]} : $qtyAman x ${formatRupiah(harga)} = ${formatRupiah(jumlah)}", "rumus": "${barangDipilih!["nama"]} : $qtyAman x ${formatRupiah(harga)} = ${formatRupiah(jumlah)}", "harga": harga, "qty": qtyAman, "jumlah": jumlah});
         }
+        // M+ barusan nambah barang ke PO -> langsung buka panel PO Daftar Item biar barangnya kelihatan.
+        // M+ tanpa barang terpilih = cuma memori kalkulator, jangan buka PO.
+        if (barangDipilih != null) { poTerbuka = true; _tombolKuningAktif = ''; }
         layar = "0"; entryBaru = true; adaQtyHitung = false;
       }
       else if (t == "M-") { memori -= double.tryParse(_stripBacktick(layar)) ?? 0; layar = "0"; entryBaru = true; }
@@ -1257,7 +1257,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
             ])));
         });
       },
-    );
+    ).then((_) { _diFormTambahBarang = false; });
   }
   // ===== BENTUK FISIK CASIO DJ-120 =====
   // Body krem, display hijau LCD 2 baris, tombol 3D: atas datar, bawah bayangan.
