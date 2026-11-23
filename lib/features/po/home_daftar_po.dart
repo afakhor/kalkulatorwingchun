@@ -1294,7 +1294,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
         headerKalkulator,
         _panelForm(),
         if (poTerbuka)
-          Expanded(child: _panelDaftarItemPO()),
+          Expanded(child: _panelDaftarItemPO())
         else
           _stripTengah(),
         Expanded(child: _areaTombolBawah()),
