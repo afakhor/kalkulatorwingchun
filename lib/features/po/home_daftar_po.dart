@@ -101,7 +101,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
   TextEditingController? _ctrlKeyboard; // controller field form yang sedang diisi keyboard bawah
   int _qwertyCaps = 1; // 0 = huruf kecil, 1 = huruf besar 1x (Shift), 2 = huruf besar semua (Caps Lock, tap lama ⇧)
   final TextEditingController _lsCariC = TextEditingController();
-  Map<int, TextEditingController> _cekEditCtrls = {}; // controller edit jumlah CEK, awet antar rebuild
   // ===== PO DAFTAR ITEM (BARU) =====
   int _poNomor = 1; // nomor PO auto iterasi, naik tiap PO baru disimpan
   bool _poRevisi = false; // true = lagi revisi PO tersimpan (simpan menimpa PO yang sama)
@@ -109,7 +108,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   final TextEditingController _pelangganC = TextEditingController();
   final TextEditingController _nomorWAC = TextEditingController(); // nomor WA pelanggan, buat kirim nota lewat WA
   bool _sembunyiSaranPelanggan = false;
-  List<Map<String, dynamic>> _poTersimpan = []; // PO tersimpan: {nomorInt, nomor, pelanggan, items, total, dicek}
+  final List<Map<String, dynamic>> _poTersimpan = []; // PO tersimpan: {nomorInt, nomor, pelanggan, items, total, dicek}
   Map<String, TextEditingController> _poCtrls = {}; // controller baris PO: "$i-nama", "$i-harga", "$i-satuan", "$i-qty", "$i-step"
   Map<String, TextEditingController> _stepCtrls = {}; // controller baris CEK/RIW: sama
   Map<int, String> _tipeHargaPO = {}; // per baris PO: 'ACUAN' / 'SATUAN'
@@ -653,29 +652,37 @@ class _S extends ConsumerState<HomeDaftarPO> {
   // Kalau CI error di nama constructor / enum, paste error-nya, saya betulkan ke po_models.dart kamu.
   PoOrder _poOrderAktif() {
     final po = ref.read(poProvider);
+    final namaPelanggan = _pelangganC.text.trim().isEmpty ? 'Tanpa Nama' : _pelangganC.text.trim();
+    final nomorWA = _nomorWAC.text.trim();
+    // Customer di po_models.dart mewajibkan id: pakai nomor WA kalau ada, kalau tidak pakai nama pelanggan.
+    final idPelanggan = nomorWA.isEmpty ? namaPelanggan : nomorWA;
     final items = po.items.map((it) => PoItem(namaBarang: it.namaBarang, qty: it.qty, hargaSatuan: it.hargaSatuan, diskonItem: 0)).toList();
     return PoOrder(
       id: _nomorPO(),
       tanggal: DateTime.now(),
-      customer: Customer(namaOrang: _pelangganC.text.trim().isEmpty ? 'Tanpa Nama' : _pelangganC.text.trim(), nomorWA: _nomorWAC.text.trim()),
+      customer: Customer(id: idPelanggan, namaOrang: namaPelanggan, nomorWA: nomorWA),
       items: items,
       diskonTotal: 0,
       ongkir: 0,
       dp: 0,
       catatan: '',
-      status: PoStatus.baru,
+      // PoStatus tidak punya 'baru': pakai nilai pertama enum (status awal PO, misal draft/pending).
+      // Ganti dengan PoStatus.xxx yang kamu mau kalau mau status lain.
+      status: PoStatus.values.first,
     );
   }
   // Kirim WA: buat PDF nota dari PO aktif -> share (pilih WhatsApp di sheet).
   Future<void> _kirimWA() async {
+    final messenger = ScaffoldMessenger.of(context); // tangkap sebelum await, biar aman dari async gap
     final po = _poOrderAktif();
-    if (po.items.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PO kosong, isi dulu 1 baris.'))); return; }
+    if (po.items.isEmpty) { messenger.showSnackBar(const SnackBar(content: Text('PO kosong, isi dulu 1 baris.'))); return; }
     try {
       final dir = await getTemporaryDirectory();
       final file = await buatPDFNota(po, dir);
       await Share.shareXFiles([XFile(file.path)], text: 'Nota ${po.id} - ${po.customer.namaOrang}');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal buat nota: $e')));
+      if (!mounted) { return; }
+      messenger.showSnackBar(SnackBar(content: Text('Gagal buat nota: $e')));
     }
   }
   // Preview Nota: tampilkan NotaPreview dari PO aktif, lengkap nama pelanggan + nomor PO.
@@ -1093,7 +1100,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
   void _gantiAdd2() { modeAdd2 = !modeAdd2; ekspresi = modeAdd2 ? "ADD2 ON: ketik 123 -> 1.23" : "ADD2 OFF"; }
   double _terapkanAdd2(double v) => modeAdd2 ? v / 100 : v;
   double get totalCek { double t = 0; for (final s in steps) { t += (s["jumlah"] as num?)?.toDouble() ?? 0; } return t; }
+  // ignore: unused_element
   void _editStepCek(int i, double jumlahBaru) { if (i < 0 || i >= steps.length) return; steps[i]["jumlah"] = jumlahBaru; steps[i]["rumus"] = "${steps[i]["rumus"]} -> ${formatHasil(jumlahBaru)}"; layar = formatHasil(totalCek); ekspresi = "CEK total = ${formatHasil(totalCek)}"; }
+  // ignore: unused_element
   void _hapusStepCek(int i) { if (i < 0 || i >= steps.length) return; steps.removeAt(i); layar = formatHasil(totalCek); ekspresi = "CEK total = ${formatHasil(totalCek)}"; }
 
   void pencet(String t) {
@@ -1295,6 +1304,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
         _panelForm(),
         if (poTerbuka)
           Expanded(child: _panelDaftarItemPO())
+        else
+          _stripTengah(),
         else
           _stripTengah(),
         Expanded(child: _areaTombolBawah()),
