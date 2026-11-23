@@ -27,11 +27,16 @@ dependencies:
   audioplayers: ^6.1.0
   sqflite: ^2.4.2
   path: ^1.9.1
+  path_provider: ^2.1.5
 
-# FIX BUILD APK: image 4.11.0 (bawaan pdf) manggil ZLibDecoder().decodeLazy(...),
-# tapi archive 4.0.9 sudah menghapus method itu -> build gagal di png_decoder.dart:377.
-# Kunci archive ke 4.0.7 yang masih punya decodeLazy. Jangan hapus blok ini
-# sampai pdf / image di-upgrade ke versi yang sudah cocok dengan archive baru.
+# FIX BUILD APK - konflik image vs archive (dibuktikan 3x log build):
+# - image 4.13.1 butuh InputMemoryStream (hanya ada di archive 4.x)
+#   SEKALIGUS decodeLazy (sudah dihapus di archive 4.0.7 / 4.0.9).
+#   Jadi mengunci archive saja tidak pernah menang.
+# - image 4.5.4 sudah dimigrasikan ke archive 4.0 dan tidak manggil decodeLazy.
+# Kunci KEDUANYA: image 4.5.4 + archive 4.0.7. Jangan hapus blok ini sampai
+# pdf / image di-upgrade ke versi yang saling cocok. Setelah ganti ini,
+# hapus pubspec.lock lalu build lagi.
 dependency_overrides:
   archive: 4.0.7
   image: 4.5.4
