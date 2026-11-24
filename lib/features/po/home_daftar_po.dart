@@ -1286,7 +1286,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (integer.length > 12) {
       var neg2 = bersih.startsWith('-') ? '-' : '';
       var digits = integer + (parts.length > 1 ? parts[1] : '');
-      var mantissa = digits[0] + '.' + digits.substring(1, 10);
+      var mantissa = '${digits[0]}.${digits.substring(1, 10)}';
       var eksponen = integer.length - 1;
       return '$neg2$mantissa $eksponen';
     }
