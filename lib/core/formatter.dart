@@ -109,7 +109,7 @@ int parseHarga(String s) {
 //   DotMatrixText(text: "1.23456789 12", size: DotMatrixSize.large)
 // ============================================================
 
-enum DotMatrixSize { small, large }
+enum DotMatrixSize { small, large, nota }
 
 class DotMatrixText extends StatelessWidget {
   final String text;
@@ -123,8 +123,8 @@ class DotMatrixText extends StatelessWidget {
     return LayoutBuilder(builder: (context, constraints) {
       final maxW = constraints.maxWidth.isFinite ? constraints.maxWidth : 320.0;
       return CustomPaint(
-        size: Size(maxW, size == DotMatrixSize.small ? 22 : 44),
-        painter: _DotMatrixPainter(text: text, isSmall: size == DotMatrixSize.small, color: color, align: align),
+        size: Size(maxW, size == DotMatrixSize.small ? 22 : size == DotMatrixSize.nota ? 28 : 44),
+        painter: _DotMatrixPainter(text: text, isSmall: size == DotMatrixSize.small, isNota: size == DotMatrixSize.nota, color: color, align: align),
       );
     });
   }
@@ -157,20 +157,21 @@ const Map<String, List<String>> _dotMap = {
 class _DotMatrixPainter extends CustomPainter {
   final String text;
   final bool isSmall;
+  final bool isNota;
   final Color color;
   final TextAlign align;
-  _DotMatrixPainter({required this.text, required this.isSmall, required this.color, required this.align});
+  _DotMatrixPainter({required this.text, required this.isSmall, this.isNota = false, required this.color, required this.align});
 
   @override
   void paint(Canvas canvas, Size size) {
     // Atas (small): titik bulat kecil, rapat -> kelihatan titik-titik kayak foto atas
     // Bawah (large): titik kotak memanjang + jarak -> kelihatan garis putus-putus kayak foto bawah
-    final dotW = isSmall ? 2.2 : 4.2;
-    final dotH = isSmall ? 2.2 : 4.2;
-    final gapX = isSmall ? 1.1 : 1.6;
-    final gapY = isSmall ? 1.1 : 1.6;
+    final dotW = isSmall ? 2.2 : isNota ? 3.0 : 4.2;
+    final dotH = isSmall ? 2.2 : isNota ? 3.0 : 4.2;
+    final gapX = isSmall ? 1.1 : isNota ? 1.3 : 1.6;
+    final gapY = isSmall ? 1.1 : isNota ? 1.3 : 1.6;
     final charW = 5 * (dotW + gapX);
-    final charGap = isSmall ? 3.0 : 5.0;
+    final charGap = isSmall ? 3.0 : isNota ? 4.0 : 5.0;
     final totalW = text.length * (charW + charGap) - charGap;
     double startX = 0;
     if (align == TextAlign.right) startX = size.width - totalW;
@@ -201,5 +202,5 @@ class _DotMatrixPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _DotMatrixPainter old) => old.text != text || old.color != color || old.isSmall != isSmall;
+  bool shouldRepaint(covariant _DotMatrixPainter old) => old.text != text || old.color != color || old.isSmall != isSmall || old.isNota != isNota;
 }
