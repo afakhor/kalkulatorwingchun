@@ -404,6 +404,41 @@ class _S extends ConsumerState<HomeDaftarPO> {
               OutlinedButton(onPressed: () { final b = double.tryParse(_pecahCtrls[keyPecah]!.text) ?? bagiDef; if (b != 0) { cHarga.text = '${(hargaNow / b).toInt()}'; setState(() {}); } }, child: const Text('x dasar', style: TextStyle(fontSize: 12))),
             ]));
           }),
+          // PECAH HARGA: Harga Acuan (biru, 75.000) -> Harga Satuan (kuning, 25.000, bisa edit) x Unit (hijau, 3, bisa edit)
+          // Border atas field = "Harga", border bawah = prosentase dari Harga Satuan (25.000 = 33.3% dari 75.000)
+          // Di Nota dikembalikan lagi ke Harga Acuan (75.000) = Harga Satuan x Unit
+          Builder(builder: (ctx) {
+            final acuanNow = double.tryParse(cHarga.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+            final pecah2 = _pecahOtomatis(acuanNow);
+            final satuanDef = pecah2['dasar']!;
+            final bagiDef2 = pecah2['bagi']!;
+            final keyUnit = '$tag-$index-unit';
+            final keySatuan = '$tag-$index-satuanHarga';
+            _pecahCtrls.putIfAbsent(keyUnit, () => TextEditingController(text: bagiDef2 == 1 ? '3' : '${bagiDef2.toInt()}'));
+            _pecahCtrls.putIfAbsent(keySatuan, () => TextEditingController(text: '${satuanDef.toInt()}'));
+            final satuanNow = double.tryParse(_pecahCtrls[keySatuan]!.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? satuanDef;
+            final unitNow = double.tryParse(_pecahCtrls[keyUnit]!.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? bagiDef2;
+            final persen = acuanNow == 0 ? 0.0 : (satuanNow / acuanNow * 100);
+            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                // Harga Satuan: border atas "Harga", bisa edit
+                SizedBox(width: 112, child: _fieldBorderAtas(label: 'Harga', controller: _pecahCtrls[keySatuan]!, angka: true, tag: '$keySatuan-harga')),
+                const SizedBox(width: 6),
+                const Text('x', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(width: 6),
+                // Unit / Step: field Unit bisa edit (3)
+                SizedBox(width: 64, child: _fieldBorderAtas(label: 'Unit', controller: _pecahCtrls[keyUnit]!, angka: true, tag: '$keyUnit-unit')),
+                const SizedBox(width: 6),
+                // = Harga Acuan (dikembalikan di Nota)
+                Expanded(child: Text('= ${formatRupiah((satuanNow * unitNow).toInt())}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                // Tombol terapkan: Harga Acuan di baris jadi Satuan x Unit
+                TextButton(onPressed: () { cHarga.text = '${(satuanNow * unitNow).toInt()}'; setState(() {}); }, child: const Text('Terapkan', style: TextStyle(fontSize: 11))),
+              ]),
+              const SizedBox(height: 2),
+              // Border bawah: prosentase dari Harga Satuan
+              Text('${persen.toStringAsFixed(1)}% dari ${formatRupiah(acuanNow.toInt())}  •  Harga Satuan ${formatRupiah(satuanNow.toInt())} x $unitNow = Harga Acuan', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            ]);
+          }),
           Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
             SizedBox(width: 112, child: _fieldBorderAtas(label: 'Harga Acuan', controller: cHarga, angka: true, tag: '$tag-$index-harga')),
             const Text('x', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -950,6 +985,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
 
   // ===== NOTA: PO aktif -> PoOrder (buat preview + PDF kirim WA) =====
+  // NOTA: Harga di Nota Preview & PDF = Harga ACUAN (Harga Satuan x Unit), bukan Harga Satuan saja.
+  // Contoh: Satuan 25.000 x Unit 3 = Acuan 75.000 -> di Nota tampil 75.000, Subtotal = 75.000 x Qty.
   PoOrder _poOrderAktif() {
     final po = ref.read(poProvider);
     final namaPelanggan = _pelangganC.text.trim().isEmpty ? 'Tanpa Nama' : _pelangganC.text.trim();
@@ -968,14 +1005,17 @@ class _S extends ConsumerState<HomeDaftarPO> {
       status: PoStatus.values.first,
     );
   }
+  // FIX SHARE WA PDF: jangan pakai Directory.systemTemp + Share tanpa mimeType/name.
+  // Pakai shareNotaPdf() di nota_pdf.dart: getTemporaryDirectory + XFile(name, mimeType: application/pdf).
+  // Jadi WA terima file PDF beneran, bukan file tanpa ekstensi / tidak bisa dibuka.
+  // _poTerakhir dipakai supaya DP/Ongkos/Diskon% yang diedit di Preview ikut ke PDF yang di-share.
+  PoOrder? _poTerakhir;
   Future<void> _kirimWA() async {
     final messenger = ScaffoldMessenger.of(context);
-    final po = _poOrderAktif();
+    final po = _poTerakhir ?? _poOrderAktif();
     if (po.items.isEmpty) { messenger.showSnackBar(const SnackBar(content: Text('PO kosong, isi dulu 1 baris.'))); return; }
     try {
-      final dir = Directory.systemTemp;
-      final file = await buatPDFNota(po, dir);
-      await Share.shareXFiles([XFile(file.path)], text: 'Nota ${po.id} - ${po.customer.namaOrang}');
+      await shareNotaPdf(po);
     } catch (e) {
       if (!mounted) { return; }
       messenger.showSnackBar(SnackBar(content: Text('Gagal buat nota: $e')));
@@ -988,7 +1028,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       insetPadding: const EdgeInsets.all(12),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Padding(padding: const EdgeInsets.fromLTRB(16, 12, 8, 4), child: Row(children: [const Text('Preview Nota', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), const Spacer(), IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx))])),
-        Flexible(child: SingleChildScrollView(child: NotaPreview(po: po))),
+        Flexible(child: SingleChildScrollView(child: NotaPreview(po: po, onChanged: (u) { _poTerakhir = u; setState(() {}); }))),
       ]),
     ));
   }
