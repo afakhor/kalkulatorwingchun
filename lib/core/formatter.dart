@@ -1,4 +1,3 @@
-import 'package:intl/intl.dart';
 
 // ============================================================
 // formatter.dart — LENGKAP FIX
@@ -20,27 +19,21 @@ String stripBacktick(String s) =>
 /// 50000 -> 50`000 | -1234567.89 -> -1`234`567.89 | 0. -> 0. | E -> E
 String groupBacktick(String s) {
   if (s == 'E' || s.isEmpty) return s;
-  // STRIP DULU — kalau s sudah "50`000", buang ` nya dulu jadi "50000".
-  // Kalau tidak di-strip, grouping kedua akan geser jadi "50000`".
-  s = stripBacktick(s);
   var neg = false;
   if (s.startsWith('-')) {
     neg = true;
     s = s.substring(1);
   }
   final parts = s.split('.');
-  var integer = parts[0].isEmpty ? '0' : parts[0];
-  // POTONG 3-3-3 DARI KANAN — tanpa reversed, tanpa StringBuffer dibalik.
-  // 50000 -> ["50", "000"] -> "50`000"
-  // 1000000 -> ["1", "000", "000"] -> "1`000`000"
-  // 1000 -> ["1", "000"] -> "1`000"
-  final groups = <String>[];
-  while (integer.length > 3) {
-    groups.insert(0, integer.substring(integer.length - 3));
-    integer = integer.substring(0, integer.length - 3);
+  final integer = parts[0].isEmpty ? '0' : parts[0];
+  final buf = StringBuffer();
+  int c = 0;
+  for (int i = integer.length - 1; i >= 0; i--) {
+    buf.write(integer[i]);
+    c++;
+    if (c % 3 == 0 && i != 0) buf.write('`');
   }
-  groups.insert(0, integer);
-  var hasil = groups.join('`');
+  var hasil = buf.toString().split('').reversed.join();
   if (parts.length > 1) hasil = '$hasil.${parts[1]}';
   return neg ? '-$hasil' : hasil;
 }
@@ -127,11 +120,17 @@ String _buangNolBelakang(String s) {
 }
 
 // ---------- TANGGAL ----------
+// Manual pakai nama bulan/hari Indonesia — TANPA DateFormat('id_ID').
+// DateFormat('id_ID') MELEMPAR exception kalau initializeDateFormatting('id_ID') belum pernah dipanggil,
+// dan exception di dalam build bikin Preview Nota jadi kotak ABU-ABU KOSONG (ErrorWidget mode release).
+// PDF Kirim WA juga kena karena buatPDFNota pakai formatTanggal yang sama.
+const _namaBulanId = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const _namaHariId = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 
-String formatTanggal(DateTime d) => DateFormat('d MMM yyyy', 'id_ID').format(d);
+String formatTanggal(DateTime d) => '${d.day} ${_namaBulanId[d.month - 1]} ${d.year}';
 
 String formatTanggalLengkap(DateTime d) =>
-    DateFormat('EEEE, d MMM yyyy', 'id_ID').format(d);
+    '${_namaHariId[d.weekday - 1]}, ${d.day} ${_namaBulanId[d.month - 1]} ${d.year}';
 
 // ---------- PARSE HARGA (INPUT CEPAT) ----------
 
