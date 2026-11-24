@@ -1152,25 +1152,27 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   // ===== BACKTICK LAYAR KALKULATOR =====
   // Penyebab layar polos: layar pakai formatHasil(), bukan formatRupiah(). formatHasil lama cuma toStringAsFixed(), tanpa grouping.
-  // FIX BACKTICK: 1000000->1`000`000, 20000->20`000, 83333->83`333
-  String _stripBacktick(String s) => s.replaceAll('`', '').replaceAll('Rp', '').replaceAll('rp', '').replaceAll(' ', '').replaceAll(',', '').trim();
+  String _stripBacktick(String s) => s.replaceAll('`', '').replaceAll('Rp', '').replaceAll(' ', '').replaceAll(',', '').trim();
   double _parseLayar() => double.tryParse(_stripBacktick(layar)) ?? 0;
+  // misal ribuan `000: 1000->1`000, 20000->20`000, 1000000->1`000`000, 83333->83`333
+  // FIX: grouping dari kanan, bukan kiri. Sesuai display Casio DJ-120 di foto
   String _groupBacktick(String s) {
     if (s == "E" || s.isEmpty) return s;
     var neg = false;
     if (s.startsWith('-')) { neg = true; s = s.substring(1); }
-    var parts = s.split('.');
-    var integer = parts[0].replaceAll(RegExp(r'[^0-9]'), '');
+    var dotParts = s.split('.');
+    var integer = dotParts[0].replaceAll(RegExp(r'[^0-9]'), '');
     if (integer.isEmpty) integer = "0";
-    final rev = integer.split('').reversed.toList();
-    final chunks = <String>[];
-    for (var j = 0; j < rev.length; j += 3) {
-      final end = (j + 3 < rev.length) ? j + 3 : rev.length;
-      chunks.add(rev.sublist(j, end).join());
+    var rev = integer.split('').reversed.toList();
+    var grouped = <String>[];
+    for (var i = 0; i < rev.length; i++) {
+      if (i > 0 && i % 3 == 0) grouped.add('`');
+      grouped.add(rev[i]);
     }
-    final groupedRev = chunks.join('`');
-    var hasil = groupedRev.split('').reversed.join();
-    if (parts.length > 1 && parts[1].isNotEmpty) hasil = "$hasil.${parts[1]}";
+    var hasil = grouped.reversed.join('');
+    if (dotParts.length > 1 && dotParts[1].isNotEmpty) {
+      hasil = "$hasil.${dotParts[1]}";
+    }
     return neg ? "-$hasil" : hasil;
   }
   String formatHasil(double v) {
