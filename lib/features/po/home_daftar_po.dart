@@ -806,10 +806,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (po.items.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PO kosong, isi dulu 1 baris.'))); return; }
     showDialog(context: context, builder: (ctx) => Dialog(
       insetPadding: const EdgeInsets.all(12),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Padding(padding: const EdgeInsets.fromLTRB(16, 12, 8, 4), child: Row(children: [const Text('Preview Nota', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), const Spacer(), IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx))])),
-        Flexible(child: SingleChildScrollView(child: NotaPreview(po: po))),
-      ]),
+      child: SizedBox(
+        height: MediaQuery.of(ctx).size.height * 0.85,
+        child: Column(children: [
+          Padding(padding: const EdgeInsets.fromLTRB(16, 12, 8, 4), child: Row(children: [const Text('Preview Nota', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), const Spacer(), IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx))])),
+          Expanded(child: SingleChildScrollView(child: NotaPreview(po: po))),
+        ]),
+      ),
     ));
   }
 
