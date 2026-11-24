@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
-import 'dart:io';
 import '../../core/po_database.dart';
 import '../../core/formatter.dart';
 import '../po/po_models.dart';
 import '../nota/nota_pdf.dart';
 import '../nota/nota_preview.dart';
-import 'package:share_plus/share_plus.dart';
 import 'po_provider.dart';
 import 'parse_cepat.dart';
 
@@ -1005,10 +1003,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
       status: PoStatus.values.first,
     );
   }
-  // FIX SHARE WA PDF: jangan pakai Directory.systemTemp + Share tanpa mimeType/name.
-  // Pakai shareNotaPdf() di nota_pdf.dart: getTemporaryDirectory + XFile(name, mimeType: application/pdf).
-  // Jadi WA terima file PDF beneran, bukan file tanpa ekstensi / tidak bisa dibuka.
-  // _poTerakhir dipakai supaya DP/Ongkos/Diskon% yang diedit di Preview ikut ke PDF yang di-share.
   PoOrder? _poTerakhir;
   Future<void> _kirimWA() async {
     final messenger = ScaffoldMessenger.of(context);
