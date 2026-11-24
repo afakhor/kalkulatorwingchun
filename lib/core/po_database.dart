@@ -24,7 +24,7 @@ import 'package:sqflite/sqflite.dart';
 //                        dimuat lagi saat buka aplikasi — jadi tutup aplikasi tidak hilang.
 class PoDatabase {
   static const _namaFile = 'po_kalkulator.sqlite';
-  static const _versi = 6; // v4: + nama_barang | v5: + harga_acuan/satuan_angka/op_satuan | v6: + tabel barang & step_draf (draf CEK anti-hilang)
+  static const _versi = 7; // v4: + nama_barang | v5: + harga_acuan/satuan_angka/op_satuan | v6: + tabel barang & step_draf (draf CEK anti-hilang) | v7: + nomor_wa/dicek di po_tersimpan, + satuan di item/log/step_draf, + tabel po_draf (PO aktif anti-hilang)
 
   Future<Database>? _dbFuture;
 
@@ -45,6 +45,8 @@ class PoDatabase {
             'tanggal TEXT NOT NULL, '
             'pelanggan TEXT NOT NULL DEFAULT \'\', '
             'total REAL NOT NULL, '
+            'nomor_wa TEXT NOT NULL DEFAULT \'\', '
+            'dicek INTEGER NOT NULL DEFAULT 0, '
             'dibuat_pada INTEGER NOT NULL)',
           );
           await db.execute(
@@ -60,6 +62,7 @@ class PoDatabase {
             'harga REAL NOT NULL, '
             'qty REAL NOT NULL, '
             'jumlah REAL NOT NULL, '
+            'satuan TEXT NOT NULL DEFAULT \'\', '
             'urutan INTEGER NOT NULL, '
             'FOREIGN KEY (po_id) REFERENCES po_tersimpan (id))',
           );
@@ -75,6 +78,7 @@ class PoDatabase {
             'harga REAL NOT NULL, '
             'qty REAL NOT NULL, '
             'jumlah REAL NOT NULL, '
+            'satuan TEXT NOT NULL DEFAULT \'\', '
             'dibuat_pada INTEGER NOT NULL)',
           );
           await db.execute(
@@ -114,6 +118,19 @@ class PoDatabase {
             'harga REAL NOT NULL, '
             'qty REAL NOT NULL, '
             'jumlah REAL NOT NULL, '
+            'satuan TEXT NOT NULL DEFAULT \'\', '
+            'urutan INTEGER NOT NULL)',
+          );
+          // v7: draf PO aktif (PO Recent) — biar tutup aplikasi tidak hilang.
+          await db.execute(
+            'CREATE TABLE po_draf('
+            'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            'nama TEXT NOT NULL, '
+            'harga REAL NOT NULL, '
+            'qty REAL NOT NULL, '
+            'jumlah REAL NOT NULL, '
+            'satuan TEXT NOT NULL DEFAULT \'\', '
+            'step TEXT NOT NULL DEFAULT \'\', '
             'urutan INTEGER NOT NULL)',
           );
         },
@@ -217,6 +234,26 @@ class PoDatabase {
               'harga REAL NOT NULL, '
               'qty REAL NOT NULL, '
               'jumlah REAL NOT NULL, '
+              'satuan TEXT NOT NULL DEFAULT \'\', '
+              'urutan INTEGER NOT NULL)',
+            );
+          }
+          if (oldVersion < 7) {
+            // v7: nomor_wa + dicek di po_tersimpan, satuan di item/log/step_draf, tabel po_draf (PO aktif). DB lama tetap jalan (try/catch + IF NOT EXISTS).
+            try { await db.execute("ALTER TABLE po_tersimpan ADD COLUMN nomor_wa TEXT NOT NULL DEFAULT ''"); } catch (_) {}
+            try { await db.execute('ALTER TABLE po_tersimpan ADD COLUMN dicek INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
+            try { await db.execute("ALTER TABLE po_item_tersimpan ADD COLUMN satuan TEXT NOT NULL DEFAULT ''"); } catch (_) {}
+            try { await db.execute("ALTER TABLE log_step ADD COLUMN satuan TEXT NOT NULL DEFAULT ''"); } catch (_) {}
+            try { await db.execute("ALTER TABLE step_draf ADD COLUMN satuan TEXT NOT NULL DEFAULT ''"); } catch (_) {}
+            await db.execute(
+              'CREATE TABLE IF NOT EXISTS po_draf('
+              'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+              'nama TEXT NOT NULL, '
+              'harga REAL NOT NULL, '
+              'qty REAL NOT NULL, '
+              'jumlah REAL NOT NULL, '
+              'satuan TEXT NOT NULL DEFAULT \'\', '
+              'step TEXT NOT NULL DEFAULT \'\', '
               'urutan INTEGER NOT NULL)',
             );
           }
@@ -237,6 +274,8 @@ class PoDatabase {
         "tanggal": r['tanggal'],
         "pelanggan": r['pelanggan'] ?? '',
         "total": (r['total'] as num).toDouble(),
+        "nomorWA": r['nomor_wa'] ?? '',
+        "dicek": (r['dicek'] as num?)?.toInt() ?? 0,
         "items": items
             .map((e) => {
                   "item": e['item'],
@@ -248,6 +287,7 @@ class PoDatabase {
                   "harga": (e['harga'] as num).toDouble(),
                   "qty": (e['qty'] as num).toDouble(),
                   "jumlah": (e['jumlah'] as num).toDouble(),
+                  "satuan": e['satuan'] ?? '',
                 })
             .toList(),
       });
@@ -261,6 +301,8 @@ class PoDatabase {
     required String pelanggan,
     required double total,
     required List<Map<String, dynamic>> items,
+    String nomorWA = '',
+    bool dicek = false,
   }) async {
     final db = await _database;
     final id = await db.insert('po_tersimpan', {
@@ -268,6 +310,8 @@ class PoDatabase {
       'tanggal': tanggal,
       'pelanggan': pelanggan,
       'total': total,
+      'nomor_wa': nomorWA,
+      'dicek': dicek ? 1 : 0,
       'dibuat_pada': DateTime.now().millisecondsSinceEpoch,
     });
     await _tulisItems(db, id, items);
@@ -280,11 +324,13 @@ class PoDatabase {
     required String pelanggan,
     required double total,
     required List<Map<String, dynamic>> items,
+    String nomorWA = '',
+    bool dicek = false,
   }) async {
     final db = await _database;
     await db.update(
         'po_tersimpan',
-        {'tanggal': tanggal, 'pelanggan': pelanggan, 'total': total},
+        {'tanggal': tanggal, 'pelanggan': pelanggan, 'total': total, 'nomor_wa': nomorWA, 'dicek': dicek ? 1 : 0},
         where: 'id = ?', whereArgs: [id]);
     await db.delete('po_item_tersimpan', where: 'po_id = ?', whereArgs: [id]);
     await _tulisItems(db, id, items);
@@ -311,6 +357,7 @@ class PoDatabase {
         'harga': (e["harga"] as num?)?.toDouble() ?? 0,
         'qty': (e["qty"] as num?)?.toDouble() ?? 0,
         'jumlah': (e["jumlah"] as num?)?.toDouble() ?? 0,
+        'satuan': "${e["satuan"] ?? ''}",
         'urutan': k,
       });
     }
@@ -327,6 +374,7 @@ class PoDatabase {
     required double harga,
     required double qty,
     required double jumlah,
+    String satuan = '',
   }) async {
     final db = await _database;
     return db.insert('log_step', {
@@ -339,6 +387,7 @@ class PoDatabase {
       'harga': harga,
       'qty': qty,
       'jumlah': jumlah,
+      'satuan': satuan,
       'dibuat_pada': DateTime.now().millisecondsSinceEpoch,
     });
   }
@@ -360,6 +409,7 @@ class PoDatabase {
         "harga": (r['harga'] as num).toDouble(),
         "qty": (r['qty'] as num).toDouble(),
         "jumlah": (r['jumlah'] as num).toDouble(),
+        "satuan": r['satuan'] ?? '',
         "tanggal":
             "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} ${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}",
       };
@@ -476,6 +526,7 @@ class PoDatabase {
           "harga": (r['harga'] as num?)?.toDouble() ?? 0,
           "qty": (r['qty'] as num?)?.toDouble() ?? 0,
           "jumlah": (r['jumlah'] as num?)?.toDouble() ?? 0,
+          "satuan": "${r['satuan'] ?? '' }",
         }).toList();
   }
 
@@ -494,9 +545,43 @@ class PoDatabase {
         'harga': (it["harga"] as num?)?.toDouble() ?? 0,
         'qty': (it["qty"] as num?)?.toDouble() ?? 0,
         'jumlah': (it["jumlah"] as num?)?.toDouble() ?? 0,
+        'satuan': "${it["satuan"] ?? ''}",
         'urutan': urutan++,
       });
     }
+  }
+
+  // ===== PO DRAF (PO aktif / PO Recent, belum jadi PO tersimpan) =====
+  // PO aktif disimpan terpisah dari step CEK, biar tutup/buka kalkulator tidak hilang.
+  Future<List<Map<String, dynamic>>> muatPoDraf() async {
+    final db = await _database;
+    final rows = await db.query('po_draf', orderBy: 'urutan ASC');
+    return rows.map((r) => {
+      'nama': r['nama'] ?? '',
+      'harga': (r['harga'] as num?)?.toDouble() ?? 0,
+      'qty': (r['qty'] as num?)?.toDouble() ?? 0,
+      'jumlah': (r['jumlah'] as num?)?.toDouble() ?? 0,
+      'satuan': r['satuan'] ?? '',
+      'step': r['step'] ?? '',
+    }).toList();
+  }
+  Future<void> simpanPoDraf(List<Map<String, dynamic>> items) async {
+    final db = await _database;
+    await db.transaction((txn) async {
+      await txn.delete('po_draf');
+      for (var i = 0; i < items.length; i++) {
+        final it = items[i];
+        await txn.insert('po_draf', {
+          'nama': it['nama'] ?? '',
+          'harga': (it['harga'] as num?)?.toDouble() ?? 0,
+          'qty': (it['qty'] as num?)?.toDouble() ?? 0,
+          'jumlah': (it['jumlah'] as num?)?.toDouble() ?? 0,
+          'satuan': it['satuan'] ?? '',
+          'step': it['step'] ?? '',
+          'urutan': i,
+        });
+      }
+    });
   }
 
   Future<void> close() async {
