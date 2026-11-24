@@ -1,13 +1,12 @@
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'dart:io';
+import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../po/po_models.dart';
 import '../calculator/po_calculator.dart';
 import '../../core/formatter.dart';
 
 // PDF FAKTUR - layout SAMA PERSIS dengan NotaPreview
-// Batch & ED + Disc HAPUS. Harga = Harga ACUAN (Harga Satuan x Unit). No. Telp = No. WA.
+// Batch & ED + Disc HAPUS. Harga = Harga ACUAN (Harga Satuan x Unit). No. Telp = No. WA opsional.
 Future<File> buatPDFNota(PoOrder po, Directory dir, {String namaToko = 'BASKORO WINGCHUN'}) async {
   final h = hitungPO(po);
   final pdf = pw.Document();
@@ -20,6 +19,7 @@ Future<File> buatPDFNota(PoOrder po, Directory dir, {String namaToko = 'BASKORO 
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
             pw.Text(namaToko, style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
             pw.Text('BABE INFO', style: const pw.TextStyle(fontSize: 12)),
+            pw.Text('' // HUB dibuang, style: const pw.TextStyle(fontSize: 12)),
           ]),
           pw.Text('FAKTUR', style: pw.TextStyle(fontSize: 28, fontWeight: pw.FontWeight.bold)),
         ]),
@@ -41,18 +41,18 @@ Future<File> buatPDFNota(PoOrder po, Directory dir, {String namaToko = 'BASKORO 
           children: [
             pw.TableRow(children: [
               for (final t in ['No', 'Nama Barang', 'Qty', 'Satuan', 'Harga', 'Subtotal'])
-                pw.Container(padding: const pw.EdgeInsets.all(6), color: pw.PdfColors.grey200, child: pw.Text(t, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12))),
+                pw.Container(padding: pw.EdgeInsets.all(6), color: PdfColors.grey200, child: pw.Text(t, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12))),
             ]),
             ...List.generate(po.items.length, (idx) {
               final i = po.items[idx];
               final sub = i.qty * i.hargaSatuan - i.diskonItem;
               return pw.TableRow(children: [
-                pw.Container(padding: const pw.EdgeInsets.all(6), child: pw.Text('${idx + 1}', textAlign: pw.TextAlign.center)),
-                pw.Container(padding: const EdgeInsets.all(6), child: pw.Text(i.namaBarang)),
-                pw.Container(padding: const EdgeInsets.all(6), child: pw.Text(formatHasil(i.qty.toDouble()), textAlign: pw.TextAlign.center)),
-                pw.Container(padding: const EdgeInsets.all(6), child: pw.Text('')),
-                pw.Container(padding: const EdgeInsets.all(6), alignment: pw.Alignment.centerRight, child: pw.Text(formatRupiah(i.hargaSatuan.toInt()))),
-                pw.Container(padding: const EdgeInsets.all(6), alignment: pw.Alignment.centerRight, child: pw.Text(formatRupiah(sub.toInt()))),
+                pw.Container(padding: pw.EdgeInsets.all(6), child: pw.Text('${idx + 1}', textAlign: pw.TextAlign.center)),
+                pw.Container(padding: pw.EdgeInsets.all(6), child: pw.Text(i.namaBarang)),
+                pw.Container(padding: pw.EdgeInsets.all(6), child: pw.Text(formatHasil(i.qty.toDouble()), textAlign: pw.TextAlign.center)),
+                pw.Container(padding: pw.EdgeInsets.all(6), child: pw.Text('')),
+                pw.Container(padding: pw.EdgeInsets.all(6), alignment: pw.Alignment.centerRight, child: pw.Text(formatRupiah(i.hargaSatuan.toInt()))),
+                pw.Container(padding: pw.EdgeInsets.all(6), alignment: pw.Alignment.centerRight, child: pw.Text(formatRupiah(sub.toInt()))),
               ]);
             }),
           ],
@@ -88,6 +88,9 @@ Future<File> buatPDFNota(PoOrder po, Directory dir, {String namaToko = 'BASKORO 
 // FIX SHARE WA PDF: buat file di getTemporaryDirectory, pakai Share.shareXFiles
 // Jangan pakai path_provider getApplicationDocumentsDirectory yang kadang WA tidak bisa baca,
 // dan jangan pakai Share.share (teks) untuk PDF.
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
 Future<void> shareNotaPdf(PoOrder po, {String namaToko = 'BASKORO WINGCHUN'}) async {
   final dir = await getTemporaryDirectory();
   final file = await buatPDFNota(po, dir, namaToko: namaToko);
