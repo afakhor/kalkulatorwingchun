@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../po/po_models.dart';
@@ -6,7 +8,7 @@ import '../calculator/po_calculator.dart';
 import '../../core/formatter.dart';
 
 // PDF FAKTUR - layout SAMA PERSIS dengan NotaPreview
-// Batch & ED + Disc HAPUS. Harga = Harga ACUAN (Harga Satuan x Unit). No. Telp = No. WA opsional.
+// Batch & ED + Disc HAPUS. Harga = Harga ACUAN (Harga Satuan x Unit). No. Telp = No. WA.
 Future<File> buatPDFNota(PoOrder po, Directory dir, {String namaToko = 'BASKORO WINGCHUN'}) async {
   final h = hitungPO(po);
   final pdf = pw.Document();
@@ -19,7 +21,6 @@ Future<File> buatPDFNota(PoOrder po, Directory dir, {String namaToko = 'BASKORO 
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
             pw.Text(namaToko, style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
             pw.Text('BABE INFO', style: const pw.TextStyle(fontSize: 12)),
-            pw.Text('' // HUB dibuang, style: const pw.TextStyle(fontSize: 12)),
           ]),
           pw.Text('FAKTUR', style: pw.TextStyle(fontSize: 28, fontWeight: pw.FontWeight.bold)),
         ]),
@@ -88,9 +89,6 @@ Future<File> buatPDFNota(PoOrder po, Directory dir, {String namaToko = 'BASKORO 
 // FIX SHARE WA PDF: buat file di getTemporaryDirectory, pakai Share.shareXFiles
 // Jangan pakai path_provider getApplicationDocumentsDirectory yang kadang WA tidak bisa baca,
 // dan jangan pakai Share.share (teks) untuk PDF.
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-
 Future<void> shareNotaPdf(PoOrder po, {String namaToko = 'BASKORO WINGCHUN'}) async {
   final dir = await getTemporaryDirectory();
   final file = await buatPDFNota(po, dir, namaToko: namaToko);
