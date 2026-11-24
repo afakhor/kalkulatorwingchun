@@ -1152,16 +1152,25 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   // ===== BACKTICK LAYAR KALKULATOR =====
   // Penyebab layar polos: layar pakai formatHasil(), bukan formatRupiah(). formatHasil lama cuma toStringAsFixed(), tanpa grouping.
-  String _stripBacktick(String s) => s.replaceAll('`', '').replaceAll('Rp', '').replaceAll(' ', '');
+  // FIX BACKTICK: 1000000->1`000`000, 20000->20`000, 83333->83`333
+  String _stripBacktick(String s) => s.replaceAll('`', '').replaceAll('Rp', '').replaceAll('rp', '').replaceAll(' ', '').replaceAll(',', '').trim();
   double _parseLayar() => double.tryParse(_stripBacktick(layar)) ?? 0;
   String _groupBacktick(String s) {
     if (s == "E" || s.isEmpty) return s;
-    var neg = false; if (s.startsWith('-')) { neg = true; s = s.substring(1); }
-    var parts = s.split('.'); var integer = parts[0].isEmpty ? "0" : parts[0];
-    var buf = StringBuffer(); int c = 0;
-    for (int i = integer.length - 1; i >= 0; i--) { buf.write(integer[i]); c++; if (c % 3 == 0 && i != 0) buf.write('`'); }
-    var hasil = buf.toString().split('').reversed.join();
-    if (parts.length > 1) hasil = "$hasil.${parts[1]}";
+    var neg = false;
+    if (s.startsWith('-')) { neg = true; s = s.substring(1); }
+    var parts = s.split('.');
+    var integer = parts[0].replaceAll(RegExp(r'[^0-9]'), '');
+    if (integer.isEmpty) integer = "0";
+    final rev = integer.split('').reversed.toList();
+    final chunks = <String>[];
+    for (var j = 0; j < rev.length; j += 3) {
+      final end = (j + 3 < rev.length) ? j + 3 : rev.length;
+      chunks.add(rev.sublist(j, end).join());
+    }
+    final groupedRev = chunks.join('`');
+    var hasil = groupedRev.split('').reversed.join();
+    if (parts.length > 1 && parts[1].isNotEmpty) hasil = "$hasil.${parts[1]}";
     return neg ? "-$hasil" : hasil;
   }
   String formatHasil(double v) {
