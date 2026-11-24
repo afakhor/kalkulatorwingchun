@@ -8,6 +8,7 @@ import '../../core/formatter.dart';
 import '../po/po_models.dart';
 import '../nota/nota_pdf.dart';
 import '../nota/nota_preview.dart';
+import 'package:share_plus/share_plus.dart';
 import 'po_provider.dart';
 import 'parse_cepat.dart';
 
@@ -71,6 +72,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   @override
   void dispose() {
     _timerSimpanDB?.cancel();
+    _nomorWAC.dispose();
     super.dispose();
   }
   // setState dibungkus: tiap ada perubahan, jadwalkan simpan ke DB (debounce 500ms).
@@ -193,6 +195,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   bool _poRevisi = false; // true = lagi revisi PO tersimpan (simpan menimpa PO yang sama)
   bool _poDicek = false; // true = PO ini sudah dicek (icon cek)
   final TextEditingController _pelangganC = TextEditingController();
+  final TextEditingController _nomorWAC = TextEditingController(); // nomor WA pelanggan di panel PO
   bool _sembunyiSaranPelanggan = false;
   final List<Map<String, dynamic>> _poTersimpan = []; // PO tersimpan: {nomorInt, nomor, pelanggan, items, total, dicek}
   Map<String, TextEditingController> _poCtrls = {}; // controller baris PO: "$i-nama", "$i-harga", "$i-satuan", "$i-qty", "$i-step"
@@ -263,7 +266,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     }
     final it = ref.read(poProvider).items[i];
     final jml = it.qty * it.hargaSatuan;
-    return {'jumlah': jml, 'teks': '${it.namaBarang} : ${formatHasil(it.qty)} x ${formatRupiah(it.hargaSatuan.toInt())} = ${formatRupiah(jml.toInt())}'};
+    return {'jumlah': jml, 'teks': '${it.namaBarang} : ${formatHasil(it.qty.toDouble())} x ${formatRupiah(it.hargaSatuan.toInt())} = ${formatRupiah(jml.toInt())}'};
   }
   // Strip MRT: total semua step + daftar step ditandai "step; ", 1 BARIS, cuma bisa geser kiri-kanan.
   // Step-nya tidak mengganggu layar kalkulator (tidak numpuk ke bawah, tidak nutupin keypad).
@@ -446,9 +449,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
   void _commitSemuaBarisPO() { _tulisUlangPO(_bacaBarisPO()); }
   // Simpan CEK jadi PO: masuk list PO tersimpan, PO aktif dikosongkan untuk PO baru.
   Future<void> _simpanPO() async {
+    final messenger = ScaffoldMessenger.of(context); // tangkap dulu, baru await, biar aman dari async gap
     _commitSemuaBarisPO();
     final data = _bacaBarisPO();
-    if (data.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PO kosong, isi dulu 1 baris.'))); return; }
+    if (data.isEmpty) { messenger.showSnackBar(const SnackBar(content: Text('PO kosong, isi dulu 1 baris.'))); return; }
     final pelanggan = _pelangganC.text.trim().isEmpty ? 'Tanpa Nama' : _pelangganC.text.trim();
     final nomorWA = _nomorWAC.text.trim();
     final total = data.fold<double>(0, (a, m) => a + ((m['jumlah'] as num?)?.toDouble() ?? 0));
@@ -486,7 +490,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       _sembunyiSaranPelanggan = false;
       _resetKeyboard();
     });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('PO $nomorSimpan tersimpan untuk $pelanggan.')));
+    messenger.showSnackBar(SnackBar(content: Text('PO $nomorSimpan tersimpan untuk $pelanggan.')));
   }
   // Cek PO: tandai PO ini sudah dicek / lepas tanda cek.
   void _cekPO() {
@@ -1397,10 +1401,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
   void bukaFormTambahBarang({Map<String, dynamic>? barangEdit}) {
     _diFormTambahBarang = true;
     final edit = barangEdit != null;
-    final kodeLama = edit ? '${barangEdit!["kode"] ?? ''}' : '';
+    final kodeLama = edit ? '${barangEdit["kode"] ?? ''}' : '';
     // Mode EDIT: isi form dari barang yang diedit. Mode TAMBAH: form kosong (default), biar tidak kebawa sisa edit sebelumnya.
     if (edit) {
-      final b = barangEdit!;
+      final b = barangEdit;
       kodeCtrl.text = '${b["kode"] ?? ''}';
       namaCtrl.text = '${b["nama"] ?? ''}';
       final kat = '${b["kategori"] ?? ''}';
