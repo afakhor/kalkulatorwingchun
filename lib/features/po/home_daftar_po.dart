@@ -201,7 +201,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   final List<Map<String, dynamic>> _poTersimpan = []; // PO tersimpan: {nomorInt, nomor, pelanggan, items, total, dicek}
   Map<String, TextEditingController> _poCtrls = {}; // controller baris PO: "$i-nama", "$i-harga", "$i-satuan", "$i-qty", "$i-step"
   Map<String, TextEditingController> _stepCtrls = {}; // controller baris CEK/RIW: sama
-  Map<String, TextEditingController> _chainCtrls = {}; // controller angka Step rantai CEK: 'step-$i-chain-$j'
+  final Map<String, TextEditingController> _chainCtrls = {}; // controller angka Step rantai CEK: 'step-$i-chain-$j'
   Map<int, String> _tipeHargaPO = {}; // per baris PO: 'ACUAN' / 'SATUAN'
   Map<int, String> _tipeHargaStep = {}; // per baris step: 'ACUAN' / 'SATUAN'
   Set<int> _poTerpilih = {}; // baris PO yang dicek (checkbox)
