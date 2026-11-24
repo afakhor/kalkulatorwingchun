@@ -23,7 +23,7 @@ String _groupBacktick(String s) {
   }
   var hasil = grouped.reversed.join('');
   if (dotParts.length > 1 && dotParts[1].isNotEmpty) {
-    hasil = '${hasil}.${dotParts[1]}';
+    hasil = '$hasil.${dotParts[1]}';
   }
   return neg ? '-$hasil' : hasil;
 }
