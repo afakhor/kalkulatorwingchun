@@ -870,7 +870,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                 const Text('BSKRO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
                 Container(width: 30, height: 1.5, color: Colors.white, margin: const EdgeInsets.symmetric(vertical: 3)),
                 const Text('WCUN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
-              ]))))))));
+              ])))))));
   }
 
   // Tombol BSKRO / garis / WCUN di keyboard QWERTY / simbol / angka (tombol biru pojok kanan bawah).
@@ -885,7 +885,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                 const Text('BSKRO', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
                 Container(width: 26, height: 1.5, color: Colors.white, margin: const EdgeInsets.symmetric(vertical: 2)),
                 const Text('WCUN', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1)),
-              ]))))))));
+              ])))))));
   }
   // Baris BASKORO WINGCHUN di bawah keypad kalkulator: muncul kalau lagi isi field (habis toggle dari QWERTY).
   // Tap baris ini = balik ke QWERTY di field yang sama. FittedBox = teks mengecil sendiri kalau layar sempit.
