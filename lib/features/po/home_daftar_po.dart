@@ -199,7 +199,22 @@ class _S extends ConsumerState<HomeDaftarPO> {
   final TextEditingController _nomorWAC = TextEditingController(); // nomor WA pelanggan di panel PO
   bool _sembunyiSaranPelanggan = false;
   final List<Map<String, dynamic>> _poTersimpan = []; // PO tersimpan: {nomorInt, nomor, pelanggan, items, total, dicek}
-  Map<String, TextEditingController> _poCtrls = {}; // controller baris PO: "$i-nama", "$i-harga", "$i-satuan", "$i-qty", "$i-step"
+  Map<String, TextEditingController> _poCtrls = {};
+  // NAVIGASI ANTAR PO: index PO tersimpan yang sedang dibuka ( -1 = PO baru aktif )
+  int _poTerbukaIndex = -1;
+  // AUTO-PECAH: pembagi per baris, key = 'cek-0' / 'riw-0' / 'po-0'
+  final Map<String, TextEditingController> _pecahCtrls = {};
+  // AUTO-PECAH: 75000 -> {dasar: 25000, bagi: 3}. Cari pembagi 2..12 yang habis dibagi & dasar >= 1000
+  Map<String, double> _pecahOtomatis(double harga) {
+    if (harga < 2000) return {'dasar': harga, 'bagi': 1};
+    for (var b in [2, 3, 4, 5, 6, 8, 10, 12]) {
+      if (harga % b == 0) {
+        final dasar = harga / b;
+        if (dasar >= 1000 && dasar == dasar.roundToDouble()) return {'dasar': dasar, 'bagi': b.toDouble()};
+      }
+    }
+    return {'dasar': harga, 'bagi': 1};
+  } // controller baris PO: "$i-nama", "$i-harga", "$i-satuan", "$i-qty", "$i-step"
   Map<String, TextEditingController> _stepCtrls = {}; // controller baris CEK/RIW: sama
   final Map<String, TextEditingController> _chainCtrls = {}; // controller angka Step rantai CEK: 'step-$i-chain-$j'
   Map<int, String> _tipeHargaPO = {}; // per baris PO: 'ACUAN' / 'SATUAN'
@@ -372,6 +387,23 @@ class _S extends ConsumerState<HomeDaftarPO> {
         if (tampilChain) ...[
           const SizedBox(height: 8),
           // Rantai: Harga Acuan x Angka Unit [Ops Step]... [+] [M+]
+          // AUTO-PECAH: 75.000 -> 25.000 x 3, pembagi bisa diedit di border atas, x = kembali ke dasar
+          Builder(builder: (ctx) {
+            final hargaNow = double.tryParse(cHarga.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+            final pecah = _pecahOtomatis(hargaNow);
+            final dasar = pecah['dasar']!;
+            final bagiDef = pecah['bagi']!;
+            final keyPecah = '$tag-$index-pecah';
+            _pecahCtrls.putIfAbsent(keyPecah, () => TextEditingController(text: bagiDef == 1 ? '3' : '${bagiDef.toInt()}'));
+            if (bagiDef <= 1) return const SizedBox.shrink();
+            return Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFFFF8E1), border: Border.all(color: Colors.amber), borderRadius: BorderRadius.circular(8)), child: Row(children: [
+              Expanded(child: Text('Auto pecah: ${formatRupiah(dasar.toInt())}  x / ÷  ${_pecahCtrls[keyPecah]!.text}  = ${formatRupiah(hargaNow.toInt())}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+              SizedBox(width: 56, child: _fieldBorderAtas(label: 'Bagi', controller: _pecahCtrls[keyPecah]!, angka: true, tag: '$keyPecah-bagi', padat: true)),
+              const SizedBox(width: 6),
+              // x = kembalikan ke dasar: Harga Acuan jadi 25.000 (dasar), bukan 75.000
+              OutlinedButton(onPressed: () { final b = double.tryParse(_pecahCtrls[keyPecah]!.text) ?? bagiDef; if (b != 0) { cHarga.text = '${(hargaNow / b).toInt()}'; setState(() {}); } }, child: const Text('x dasar', style: TextStyle(fontSize: 12))),
+            ]));
+          }),
           Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
             SizedBox(width: 112, child: _fieldBorderAtas(label: 'Harga Acuan', controller: cHarga, angka: true, tag: '$tag-$index-harga')),
             const Text('x', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -520,6 +552,55 @@ class _S extends ConsumerState<HomeDaftarPO> {
     }
   }
   void _commitSemuaBarisPO() { _tulisUlangPO(_bacaBarisPO()); }
+  // RIW -> PO LANGSUNG: ambil baris RIW, masuk PO aktif, buka PO Daftar Item. Tidak bikin duplikat.
+  void _riwKePOLangsung(int index) {
+    if (index < 0 || index >= steps.length) return;
+    final st = steps[index];
+    final nama = _namaDariStep(st);
+    final harga = ((st['harga'] as num?)?.toDouble() ?? 0).toInt();
+    final qty = ((st['qty'] as num?)?.toDouble() ?? 0);
+    final satuan = '${st['satuan'] ?? ''}';
+    final step = '${st['rumus'] ?? st['item'] ?? ''}';
+    final lama = _bacaBarisPO();
+    // Cek duplikat: nama + harga sama -> jangan tambah 2x, tapi update qty
+    final idxSama = lama.indexWhere((m) => '${m['nama']}'.trim().toLowerCase() == nama.trim().toLowerCase() && ((m['harga'] as num?)?.toDouble() ?? 0) == harga.toDouble());
+    if (idxSama >= 0) {
+      lama[idxSama]['qty'] = ((lama[idxSama]['qty'] as num?)?.toDouble() ?? 0) + qty;
+    } else {
+      lama.add({'nama': nama, 'harga': harga.toDouble(), 'satuan': satuan, 'qty': qty, 'step': step, 'jumlah': qty * harga, 'tipeHarga': 'SATUAN'});
+    }
+    _tulisUlangPO(lama);
+    // Rebuild controller PO biar langsung kelihatan
+    _poCtrls = {};
+    for (var i = 0; i < lama.length; i++) {
+      _poCtrls['$i-nama'] = TextEditingController(text: '${lama[i]['nama']}');
+      _poCtrls['$i-harga'] = TextEditingController(text: '${(lama[i]['harga'] as num?)?.toInt() ?? 0}');
+      _poCtrls['$i-satuan'] = TextEditingController(text: '${lama[i]['satuan'] ?? ''}');
+      _poCtrls['$i-qty'] = TextEditingController(text: '${lama[i]['qty']}');
+      _poCtrls['$i-step'] = TextEditingController(text: '${lama[i]['step'] ?? ''}');
+    }
+    setState(() { _tombolKuningAktif = ''; poTerbuka = true; });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$nama masuk PO - ${_nomorPO()}')));
+  }
+  // NAVIGASI ANTAR PO: ◀ ▶ + chip Recent. Penanda: PO 1/5 + No. PO + pelanggan
+  void _poKeIndex(int idx) {
+    if (idx < 0 || idx >= _poTersimpan.length) return;
+    final po = _poTersimpan[idx];
+    final items = (po['items'] as List).map((e) => {'nama': e['nama'] ?? '', 'harga': (e['harga'] as num?)?.toDouble() ?? 0, 'satuan': e['satuan'] ?? '', 'qty': (e['qty'] as num?)?.toDouble() ?? 0, 'step': e['step'] ?? '', 'jumlah': (e['jumlah'] as num?)?.toDouble() ?? 0}).toList();
+    _tulisUlangPO(items);
+    _poCtrls = {};
+    for (var i = 0; i < items.length; i++) {
+      _poCtrls['$i-nama'] = TextEditingController(text: '${items[i]['nama']}');
+      _poCtrls['$i-harga'] = TextEditingController(text: '${(items[i]['harga'] as num?)?.toInt() ?? 0}');
+      _poCtrls['$i-satuan'] = TextEditingController(text: '${items[i]['satuan'] ?? ''}');
+      _poCtrls['$i-qty'] = TextEditingController(text: '${items[i]['qty']}');
+      _poCtrls['$i-step'] = TextEditingController(text: '${items[i]['step'] ?? ''}');
+    }
+    setState(() { _poTerbukaIndex = idx; _poNomor = (po['nomorInt'] as int?) ?? _poNomor; _pelangganC.text = '${po['pelanggan'] ?? ''}'; _nomorWAC.text = '${po['nomorWA'] ?? ''}'; _poRevisi = true; poTerbuka = true; });
+  }
+  // SIMPAN CEPAT di samping No. PO: langsung simpan PO aktif, tidak nunggu RIW
+  Future<void> _simpanCepatDariNomorPO() async { await _simpanPO(); }
+
   // Simpan CEK jadi PO: masuk list PO tersimpan, PO aktif dikosongkan untuk PO baru.
   // ignore: unused_element
   Future<void> _simpanPO() async {
@@ -618,17 +699,11 @@ class _S extends ConsumerState<HomeDaftarPO> {
       _resetKeyboard();
     });
   }
-  // Log RIW dipakai lagi ke PO: tambah sebagai item PO, lalu buka panel PO.
+  // Log RIW dipakai lagi ke PO - LANGSUNG seperti CEK, tidak bikin 2x.
+  // Kalau nama + harga sama sudah ada di PO, qty ditambah, bukan baris baru.
   void _logKePO(int i) {
     _commitBarisStep(i);
-    final st = steps[i];
-    final nama = _namaDariStep(st);
-    final qty = ((st['qty'] as num?)?.toDouble() ?? 0).round();
-    final harga = ((st['harga'] as num?)?.toDouble() ?? 0).toInt();
-    final it = parseInputCepat('$qty x $nama $harga');
-    if (it != null) { ref.read(poProvider.notifier).tambahItem(it); }
-    setState(() { poTerbuka = true; _tombolKuningAktif = ''; _resetKeyboard(); });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Log "$nama" masuk ke PO.')));
+    _riwKePOLangsung(i);
   }
 
   // FORM CEK di panel: format baris BARU (label di border atas, checkbox, hapus).
@@ -827,14 +902,32 @@ class _S extends ConsumerState<HomeDaftarPO> {
         ]),
         // Header PO SATU BARIS: No. PO | Nama Pelanggan | Nomor WA.
         // Tombol "Simpan CEK jadi PO" + "Cek PO" DIHAPUS (PO aktif auto-tersimpan sebagai draf lewat _simpanSemuaKeDB).
+        // HEADER PO: No. PO + 💾 Simpan + ◀ ▶ antar PO + penanda PO x/y + Nama + WA
         Row(children: [
           Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.amber.shade200, borderRadius: BorderRadius.circular(16)), child: Text('No. PO: ${_nomorPO()}${_poRevisi ? ' (revisi)' : ''}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+          const SizedBox(width: 4),
+          // IKON SIMPAN di samping No. PO (lingkaran hijau di foto): langsung simpan, tidak nunggu RIW
+          InkWell(onTap: () => _simpanCepatDariNomorPO(), borderRadius: BorderRadius.circular(20), child: Container(padding: const EdgeInsets.all(6), decoration: const BoxDecoration(color: Color(0xFF2EBD5A), shape: BoxShape.circle), child: const Icon(Icons.save, size: 18, color: Colors.white))),
+          const SizedBox(width: 4),
+          // NAVIGASI ANTAR PO: ◀ ▶ - penanda antar PO, tekan untuk pindah PO
+          InkWell(onTap: _poTerbukaIndex > 0 ? () => _poKeIndex(_poTerbukaIndex - 1) : null, child: Container(padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: _poTerbukaIndex > 0 ? Colors.teal : Colors.grey.shade300, shape: BoxShape.circle), child: const Icon(Icons.chevron_left, size: 18, color: Colors.white))),
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(_poTersimpan.isEmpty ? 'PO 1/1' : 'PO ${_poTerbukaIndex < 0 ? _poTersimpan.length + 1 : _poTerbukaIndex + 1}/${_poTersimpan.length + 1}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+          InkWell(onTap: _poTerbukaIndex >= 0 && _poTerbukaIndex < _poTersimpan.length - 1 ? () => _poKeIndex(_poTerbukaIndex + 1) : null, child: Container(padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: _poTerbukaIndex >= 0 && _poTerbukaIndex < _poTersimpan.length - 1 ? Colors.teal : Colors.grey.shade300, shape: BoxShape.circle), child: const Icon(Icons.chevron_right, size: 18, color: Colors.white))),
           if (_poDicek) ...[const SizedBox(width: 6), Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), decoration: BoxDecoration(color: Colors.teal, borderRadius: BorderRadius.circular(16)), child: const Text('✓ Sudah dicek', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)))],
           const SizedBox(width: 8),
           Expanded(child: _fieldBorderAtas(label: 'Nama Pelanggan', padat: true, controller: _pelangganC)),
           const SizedBox(width: 8),
           Expanded(child: _fieldBorderAtas(label: 'Nomor WA (08...)', controller: _nomorWAC, angka: true, padat: true)),
         ]),
+        // CHIP PO RECENT: penanda antar PO kedua - tap chip langsung buka PO itu
+        if (_poTersimpan.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+            for (var pi = 0; pi < _poTersimpan.length; pi++)
+              Padding(padding: const EdgeInsets.only(right: 6), child: ActionChip(label: Text('${_poTersimpan[pi]['nomor'] ?? ''} • ${_poTersimpan[pi]['pelanggan'] ?? ''}', style: TextStyle(fontSize: 11, fontWeight: _poTerbukaIndex == pi ? FontWeight.bold : FontWeight.normal)), backgroundColor: _poTerbukaIndex == pi ? Colors.teal.shade100 : Colors.white, onPressed: () => _poKeIndex(pi))),
+            ActionChip(label: const Text('+ PO Baru', style: TextStyle(fontSize: 11)), onPressed: () => setState(() { _poTerbukaIndex = -1; _poRevisi = false; _pelangganC.clear(); _nomorWAC.clear(); })),
+          ])),
+        ],
         if (tampilSaran) ...[
           const SizedBox(height: 4),
           Wrap(spacing: 4, runSpacing: 4, children: saran.map((nm) => ActionChip(label: Text(nm, style: const TextStyle(fontSize: 11)), onPressed: () => setState(() { _pelangganC.text = nm; _sembunyiSaranPelanggan = true; }))).toList()),
@@ -1174,6 +1267,30 @@ class _S extends ConsumerState<HomeDaftarPO> {
       hasil = "$hasil.${dotParts[1]}";
     }
     return neg ? "-$hasil" : hasil;
+  }
+  // FORMAT LAYAR SEPERTI GAMBAR CASIO DJ-120:
+  // Atas (kecil): ekspresi 12 digit + titik, misal 123456789012.
+  // Bawah (besar): hasil 12 digit, kalau lebih dari 12 digit jadi ilmiah: 1.23456789 12
+  // Ribuan tetap pakai backtick ` : 1`000`000, 20`000, 83`333
+  String _layarAtasCasio() {
+    if (ekspresi.isEmpty) return '';
+    var e = ekspresi.replaceAll('`', '');
+    if (e.length > 14) e = e.substring(e.length - 14);
+    return e;
+  }
+  String _layarBawahCasio() {
+    var bersih = _stripBacktick(layar);
+    if (bersih == 'E' || bersih.isEmpty) return bersih;
+    var parts = bersih.split('.');
+    var integer = parts[0].replaceAll('-', '');
+    if (integer.length > 12) {
+      var neg2 = bersih.startsWith('-') ? '-' : '';
+      var digits = integer + (parts.length > 1 ? parts[1] : '');
+      var mantissa = digits[0] + '.' + digits.substring(1, 10);
+      var eksponen = integer.length - 1;
+      return '$neg2$mantissa $eksponen';
+    }
+    return _groupBacktick(bersih);
   }
   String formatHasil(double v) {
     if (v.isNaN || v.isInfinite) return "E";
@@ -1659,9 +1776,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
         Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: BoxDecoration(color: const Color(0xFFDDE8D0), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.black26)),
           child: Column(children: [
             // Baris 1 display Casio: ekspresi (misal "5 x 80`000") - kecil, kanan
-            SizedBox(width: double.infinity, child: Text(ekspresi.isEmpty ? " " : ekspresi, style: const TextStyle(fontSize: 12, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right)),
+            SizedBox(width: double.infinity, child: DotMatrixText(text: _layarAtasCasio().isEmpty ? ' ' : _layarAtasCasio(), size: DotMatrixSize.small, color: Colors.black54)),
             // Baris 2: Acuan (kiri, kecil) + Layar utama (kanan, besar)
-            Row(children: [Expanded(child: Text(teksAcuan(), style: const TextStyle(fontSize: 12, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Flexible(child: Text(layar, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: adaError ? Colors.red : Colors.black), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right))]),
+            Row(children: [Expanded(child: Text(teksAcuan(), style: const TextStyle(fontSize: 12, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Flexible(child: DotMatrixText(text: _layarBawahCasio(), size: DotMatrixSize.large, color: adaError ? Colors.red : Colors.black))]),
             const SizedBox(height: 2),
             Row(children: [Expanded(child: Text(barangDipilih == null ? "Pilih barang via LS" : "${barangDipilih!["nama"]} • ${barangDipilih!["kategori"]}", style: const TextStyle(fontSize: 9, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Text(teksSaran(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: warnaSaran()))]),
           ]),
