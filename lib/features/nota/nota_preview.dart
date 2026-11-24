@@ -50,7 +50,7 @@ class _NotaPreviewState extends State<NotaPreview> {
     final diskon = sub * persen / 100;
     final ongkir = double.tryParse(_ongkirCtrl.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
     final dp = double.tryParse(_dpCtrl.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
-    return PoOrder(id: widget.po.id, tanggal: widget.po.tanggal, customer: widget.po.customer, items: widget.po.items, catatan: widget.po.catatan, dp: dp, diskonTotal: diskon, ongkir: ongkir, status: widget.po.status);
+    return PoOrder(id: widget.po.id, tanggal: widget.po.tanggal, customer: widget.po.customer, items: widget.po.items, catatan: widget.po.catatan, dp: dp.toInt(), diskonTotal: diskon.toInt(), ongkir: ongkir.toInt(), status: widget.po.status);
   }
 
   void _apply() {
