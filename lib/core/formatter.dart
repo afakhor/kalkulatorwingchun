@@ -123,7 +123,7 @@ class DotMatrixText extends StatelessWidget {
     return LayoutBuilder(builder: (context, constraints) {
       final maxW = constraints.maxWidth.isFinite ? constraints.maxWidth : 320.0;
       return CustomPaint(
-        size: Size(maxW, size == DotMatrixSize.small ? 22 : size == DotMatrixSize.nota ? 28 : 44),
+        size: Size(maxW, size == DotMatrixSize.small ? 14 : size == DotMatrixSize.nota ? 22 : 30  // small dikecilkan: 18 -> 14 (yang dilingkari merah)),
         painter: _DotMatrixPainter(text: text, isSmall: size == DotMatrixSize.small, isNota: size == DotMatrixSize.nota, color: color, align: align),
       );
     });
@@ -166,8 +166,8 @@ class _DotMatrixPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     // Atas (small): titik bulat kecil, rapat -> kelihatan titik-titik kayak foto atas
     // Bawah (large): titik kotak memanjang + jarak -> kelihatan garis putus-putus kayak foto bawah
-    final dotW = isSmall ? 2.2 : isNota ? 3.0 : 4.2;
-    final dotH = isSmall ? 2.2 : isNota ? 3.0 : 4.2;
+    final dotW = isSmall ? 1.8 : isNota ? 3.0 : 4.2; // titik small dikecilkan: 2.2 -> 1.8
+    final dotH = isSmall ? 1.8 : isNota ? 3.0 : 4.2; // titik small dikecilkan: 2.2 -> 1.8
     final gapX = isSmall ? 1.1 : isNota ? 1.3 : 1.6;
     final gapY = isSmall ? 1.1 : isNota ? 1.3 : 1.6;
     final charW = 5 * (dotW + gapX);
