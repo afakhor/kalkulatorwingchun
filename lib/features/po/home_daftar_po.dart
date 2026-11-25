@@ -161,7 +161,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
   double lastAngka2 = 0;
   double qtyHitung = 1;
   bool adaQtyHitung = false;
+  double? _qtyMPlus;
   double? _qtyMPlus; // qty hitungan terakhir (=): operand yang BUKAN harga barang. Dipakai M+ biar qty tidak jadi hasil/jumlah (fix Qty 3750000.0).
+  bool _habisMPlus = false; // ALUR PO: ... = M+ ... = M+ ... = (akhiri). = terakhir SESUDAH M+ = tutup PO.
   double memori = 0;
   // ===== LACI MULTITASKING CASIO — BARU, TIDAK MENGHAPUS LACI LAMA =====
   double tarifPajak = 11;
@@ -202,7 +204,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
   int _poTerbukaIndex = -1;
   // AUTO-PECAH: pembagi per baris, key = 'cek-0' / 'riw-0' / 'po-0'
   final Map<String, TextEditingController> _pecahCtrls = {};
-  // AUTO-PECAH: 75000 -> {dasar: 25000, bagi: 3}. Cari pembagi 2..12 yang habis dibagi & dasar >= 1000
+  // PATOKAN % : Harga Satuan awal per baris (dari logika _pecahOtomatis, bukan angka dummy). 0.0% = belum diedit dari patokan ini.
+  // Disimpan sekali, TIDAK dihitung ulang dari Harga Acuan yang sudah berubah, biar % tidak balik ke 0% sendiri.
+  final Map<String, double> _satuanBaseline = {};
+  // AUTO-PECAH (logika): cari pembagi 2..12 yang habis dibagi & dasar >= 1000, dari Harga Acuan yang diinput
   Map<String, double> _pecahOtomatis(double harga) {
     if (harga < 2000) return {'dasar': harga, 'bagi': 1};
     for (var b in [2, 3, 4, 5, 6, 8, 10, 12]) {
@@ -385,26 +390,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
         if (tampilChain) ...[
           const SizedBox(height: 8),
           // Rantai: Harga Acuan x Angka Unit [Ops Step]... [+] [M+]
-          // AUTO-PECAH: 75.000 -> 25.000 x 3, pembagi bisa diedit di border atas, x = kembali ke dasar
-          Builder(builder: (ctx) {
-            final hargaNow = double.tryParse(cHarga.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
-            final pecah = _pecahOtomatis(hargaNow);
-            final dasar = pecah['dasar']!;
-            final bagiDef = pecah['bagi']!;
-            final keyPecah = '$tag-$index-pecah';
-            _pecahCtrls.putIfAbsent(keyPecah, () => TextEditingController(text: bagiDef == 1 ? '3' : '${bagiDef.toInt()}'));
-            if (bagiDef <= 1) return const SizedBox.shrink();
-            return Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFFFF8E1), border: Border.all(color: Colors.amber), borderRadius: BorderRadius.circular(8)), child: Row(children: [
-              Expanded(child: Text('Auto pecah: ${formatRupiah(dasar.toInt())}  x / ÷  ${_pecahCtrls[keyPecah]!.text}  = ${formatRupiah(hargaNow.toInt())}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
-              SizedBox(width: 56, child: _fieldBorderAtas(label: 'Bagi', controller: _pecahCtrls[keyPecah]!, angka: true, tag: '$keyPecah-bagi', padat: true)),
-              const SizedBox(width: 6),
-              // x = kembalikan ke dasar: Harga Acuan jadi 25.000 (dasar), bukan 75.000
-              OutlinedButton(onPressed: () { final b = double.tryParse(_pecahCtrls[keyPecah]!.text) ?? bagiDef; if (b != 0) { cHarga.text = '${(hargaNow / b).toInt()}'; setState(() {}); } }, child: const Text('x dasar', style: TextStyle(fontSize: 12))),
-            ]));
-          }),
-          // PECAH HARGA: Harga Acuan (biru, 75.000) -> Harga Satuan (kuning, 25.000, bisa edit) x Unit (hijau, 3, bisa edit)
-          // Border atas field = "Harga", border bawah = prosentase dari Harga Satuan (25.000 = 33.3% dari 75.000)
-          // Di Nota dikembalikan lagi ke Harga Acuan (75.000) = Harga Satuan x Unit
+          // AUTO-PECAH (logika): Harga Acuan -> Harga Satuan x Angka Satuan, pembagi dari _pecahOtomatis
+          // UI RANTAI (logika TIDAK diubah): Harga Acuan -> pecah jadi Harga Satuan x Angka Satuan
+          // Contoh logika: klik Harga Acuan x Qty (ops) Step = Jumlah  ->  jadi  Harga Satuan x Angka Satuan x Qty (ops) Step = Jumlah
+          // Harga Satuan bisa diedit langsung, garis bawah border = % perubahan dari nilai awal (0% bila tidak diedit)
           Builder(builder: (ctx) {
             final acuanNow = double.tryParse(cHarga.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
             final pecah2 = _pecahOtomatis(acuanNow);
@@ -412,49 +401,56 @@ class _S extends ConsumerState<HomeDaftarPO> {
             final bagiDef2 = pecah2['bagi']!;
             final keyUnit = '$tag-$index-unit';
             final keySatuan = '$tag-$index-satuanHarga';
-            _pecahCtrls.putIfAbsent(keyUnit, () => TextEditingController(text: bagiDef2 == 1 ? '3' : '${bagiDef2.toInt()}'));
+            _pecahCtrls.putIfAbsent(keyUnit, () => TextEditingController(text: '${bagiDef2.toInt()}')); // LOGIKA, bukan dummy: bagi dari _pecahOtomatis (1 = tidak pecah)
             _pecahCtrls.putIfAbsent(keySatuan, () => TextEditingController(text: '${satuanDef.toInt()}'));
             final satuanNow = double.tryParse(_pecahCtrls[keySatuan]!.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? satuanDef;
             final unitNow = double.tryParse(_pecahCtrls[keyUnit]!.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? bagiDef2;
-            final persen = acuanNow == 0 ? 0.0 : (satuanNow / acuanNow * 100);
+            // PATOKAN % TETAP: simpan sekali saat baris pertama dibuat (Harga Satuan awal dari logika). Jangan pakai satuanDef yang dihitung ulang.
+            _satuanBaseline.putIfAbsent(keySatuan, () => satuanDef);
+            final patokan = _satuanBaseline[keySatuan]!;
+            // % info dari Harga Satuan awal: 0.0% bila belum diedit, berubah begitu di-tap lalu diedit
+            final persenEdit = patokan == 0 ? 0.0 : (satuanNow - patokan) / patokan * 100;
+            // NOTA / WA pakai harga UPDATE: Harga Acuan disamakan ke Satuan x Angka Satuan
+            // tanpa nunggu tombol Terapkan, jadi Preview Nota & Share WA = harga update x Qty x Step bila ada
+            final acuanUpdate = satuanNow * unitNow;
+            if (acuanUpdate > 0 && (acuanUpdate - acuanNow).abs() > 0.01) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (cHarga.text != '${acuanUpdate.toInt()}') { cHarga.text = '${acuanUpdate.toInt()}'; setState(() {}); }
+              });
+            }
+            final jumlahRantai = _hitungChain(satuanNow * unitNow, qty, chainHitung);
             return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                // Harga Satuan: border atas "Harga", bisa edit
-                SizedBox(width: 112, child: _fieldBorderAtas(label: 'Harga', controller: _pecahCtrls[keySatuan]!, angka: true, tag: '$keySatuan-harga')),
-                const SizedBox(width: 6),
+              // Baris 1: Harga (Satuan, bisa edit)  x / ÷  Angka Satuan  x  Qty  [ops Step...]  [+] [M+]
+              Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                SizedBox(width: 104, child: _fieldBorderAtas(label: 'Harga', controller: _pecahCtrls[keySatuan]!, angka: true, tag: '$keySatuan-harga')),
                 const Text('x', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(width: 6),
-                // Unit / Step: field Unit bisa edit (3)
-                SizedBox(width: 64, child: _fieldBorderAtas(label: 'Unit', controller: _pecahCtrls[keyUnit]!, angka: true, tag: '$keyUnit-unit')),
-                const SizedBox(width: 6),
-                // = Harga Acuan (dikembalikan di Nota)
-                Expanded(child: Text('= ${formatRupiah((satuanNow * unitNow).toInt())}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
-                // Tombol terapkan: Harga Acuan di baris jadi Satuan x Unit
+                SizedBox(width: 56, child: _fieldBorderAtas(label: 'Angka Satuan', controller: _pecahCtrls[keyUnit]!, angka: true, tag: '$keyUnit-unit')),
+                const Text('x', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                SizedBox(width: 64, child: _fieldBorderAtas(label: 'Qty', controller: cQty, angka: true, tag: '$tag-$index-qty')),
+                for (var j = 0; j < chain.length; j++) ...[
+                  SizedBox(width: 44, child: OutlinedButton(style: OutlinedButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => onChainOps?.call(j), child: Text('${chain[j]['ops'] ?? 'x'}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))),
+                  SizedBox(width: 72, child: _fieldBorderAtas(label: 'Step', controller: chainCtrls[j], angka: true, tag: '$tag-$index-chain-$j')),
+                  InkWell(onTap: () => onChainHapus?.call(j), child: const Icon(Icons.close, size: 18, color: Colors.red)),
+                ],
+                OutlinedButton(onPressed: onChainTambah, child: const Text('+')),
+                if (onMPlus != null) ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: onMPlus, child: const Text('M+')),
+              ]),
+              const SizedBox(height: 3),
+              // Garis bawah border: % perubahan Harga Satuan + Terapkan (logika lama, tidak diubah)
+              Row(children: [
+                Expanded(child: Text('${persenEdit.toStringAsFixed(1)}% dari ${formatRupiah(patokan.toInt())}  •  Harga ${formatRupiah(satuanNow.toInt())} x ${unitNow.toStringAsFixed(unitNow % 1 == 0 ? 0 : 1)} = Harga Acuan ${formatRupiah((satuanNow * unitNow).toInt())}', style: const TextStyle(fontSize: 11, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis)),
                 TextButton(onPressed: () { cHarga.text = '${(satuanNow * unitNow).toInt()}'; setState(() {}); }, child: const Text('Terapkan', style: TextStyle(fontSize: 11))),
               ]),
-              const SizedBox(height: 2),
-              // Border bawah: prosentase dari Harga Satuan
-              Text('${persen.toStringAsFixed(1)}% dari ${formatRupiah(acuanNow.toInt())}  •  Harga Satuan ${formatRupiah(satuanNow.toInt())} x $unitNow = Harga Acuan', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              const SizedBox(height: 4),
+              // Baris Jumlah TARUH DI BAWAH (tadinya tidak cukup di samping) - UI saja, nilai dari _hitungChain yang sama
+              Row(children: [
+                Expanded(child: _fieldBorderAtas(label: 'Unit / Satuan', controller: cSatuan, tag: '$tag-$index-satuan')),
+                const SizedBox(width: 8),
+                Expanded(child: InputDecorator(decoration: const InputDecoration(labelText: 'Jumlah', isDense: true, border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10)), child: Text(formatRupiah(jumlahRantai.toInt()), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)))),
+              ]),
             ]);
           }),
-          Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            SizedBox(width: 112, child: _fieldBorderAtas(label: 'Harga Acuan', controller: cHarga, angka: true, tag: '$tag-$index-harga')),
-            const Text('x', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            SizedBox(width: 92, child: _fieldBorderAtas(label: 'Angka Unit', controller: cQty, angka: true, tag: '$tag-$index-qty')),
-            for (var j = 0; j < chain.length; j++) ...[
-              SizedBox(width: 46, child: OutlinedButton(style: OutlinedButton.styleFrom(padding: EdgeInsets.zero), onPressed: () => onChainOps?.call(j), child: Text('${chain[j]['ops'] ?? 'x'}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))),
-              SizedBox(width: 92, child: _fieldBorderAtas(label: 'Step', controller: chainCtrls[j], angka: true, tag: '$tag-$index-chain-$j')),
-              InkWell(onTap: () => onChainHapus?.call(j), child: const Icon(Icons.close, size: 18, color: Colors.red)),
-            ],
-            OutlinedButton(onPressed: onChainTambah, child: const Text('+')),
-            if (onMPlus != null) ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: onMPlus, child: const Text('M+')),
-          ]),
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(child: _fieldBorderAtas(label: 'Unit / Satuan', controller: cSatuan, tag: '$tag-$index-satuan')),
-            const SizedBox(width: 8),
-            jumlahWidget,
-          ]),
+
         ] else ...[
           const SizedBox(height: 8),
           _fieldBorderAtas(label: 'Harga', controller: cHarga, angka: true, tag: '$tag-$index-harga'),
@@ -472,7 +468,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
 
   // ===== BANTUAN PO / STEP =====
-  String _nomorPO() { return 'PO B•WC-${_poNomor.toString().padLeft(3, '0')}B•I'; }
+  // FORMAT No. PO BARU: B.W - 000001B.I  (6 digit, iterasi +1 tiap PO selesai)
+  // Contoh: PO ke-1 -> B.W - 000001B.I | PO ke-2 -> B.W - 000002B.I | PO ke-12 -> B.W - 000012B.I
+  String _nomorPO() { return 'B.W - ${_poNomor.toString().padLeft(6, '0')}B.I'; }
   String _namaDariStep(Map<String, dynamic> st) {
     final itemStr = '${st['item'] ?? ''}';
     if (itemStr.contains(' : ')) { return itemStr.split(' : ').first.trim(); }
@@ -586,7 +584,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   void _commitSemuaBarisPO() { _tulisUlangPO(_bacaBarisPO()); }
   // RIW -> PO LANGSUNG: ambil baris RIW, masuk PO aktif, buka PO Daftar Item. Tidak bikin duplikat.
-  void _riwKePOLangsung(int index) {
+  void _riwKePOLangsung(int index, {bool bukaPO = true}) {
     if (index < 0 || index >= steps.length) return;
     final st = steps[index];
     final nama = _namaDariStep(st);
@@ -612,8 +610,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       _poCtrls['$i-qty'] = TextEditingController(text: '${lama[i]['qty']}');
       _poCtrls['$i-step'] = TextEditingController(text: '${lama[i]['step'] ?? ''}');
     }
-    setState(() { _tombolKuningAktif = ''; poTerbuka = true; });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$nama masuk PO - ${_nomorPO()}')));
+    if (bukaPO) { setState(() { _tombolKuningAktif = ''; poTerbuka = true; }); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$nama masuk PO - ${_nomorPO()}'))); }
   }
   // NAVIGASI ANTAR PO: ◀ ▶ + chip Recent. Penanda: PO 1/5 + No. PO + pelanggan
   void _poKeIndex(int idx) {
@@ -736,7 +733,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   // Kalau nama + harga sama sudah ada di PO, qty ditambah, bukan baris baru.
   void _logKePO(int i) {
     _commitBarisStep(i);
-    _riwKePOLangsung(i);
+    _riwKePOLangsung(i, bukaPO: false);
+    _habisMPlus = true; // habis M+ di baris -> = berikutnya = tutup PO
   }
 
   // FORM CEK di panel: format baris BARU (label di border atas, checkbox, hapus).
@@ -947,7 +945,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
           Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(_poTersimpan.isEmpty ? 'PO 1/1' : 'PO ${_poTerbukaIndex < 0 ? _poTersimpan.length + 1 : _poTerbukaIndex + 1}/${_poTersimpan.length + 1}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
           InkWell(onTap: _poTerbukaIndex >= 0 && _poTerbukaIndex < _poTersimpan.length - 1 ? () => _poKeIndex(_poTerbukaIndex + 1) : null, child: Container(padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: _poTerbukaIndex >= 0 && _poTerbukaIndex < _poTersimpan.length - 1 ? Colors.teal : Colors.grey.shade300, shape: BoxShape.circle), child: const Icon(Icons.chevron_right, size: 18, color: Colors.white))),
           if (_poDicek) ...[const SizedBox(width: 6), Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), decoration: BoxDecoration(color: Colors.teal, borderRadius: BorderRadius.circular(16)), child: const Text('✓ Sudah dicek', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)))],
-          const SizedBox(width: 8),
+        ]),
+        // Nama + WA tidak cukup di samping No.PO -> taruh DI BAWAHNYA
+        const SizedBox(height: 6),
+        Row(children: [
           Expanded(child: _fieldBorderAtas(label: 'Nama Pelanggan', padat: true, controller: _pelangganC)),
           const SizedBox(width: 8),
           Expanded(child: _fieldBorderAtas(label: 'Nomor WA (08...)', controller: _nomorWAC, angka: true, padat: true)),
@@ -1403,6 +1404,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   void refreshSemuaNominal() { for (var s in satuanList) { refreshNominal(s); } }
 
   void _inputAngka(String t) {
+    _habisMPlus = false; // ketik baru sesudah M+ -> = berikutnya jadi = hitung biasa, bukan penutup PO
     if (adaError) { layar = "0"; ekspresi = ""; akumulator = 0; opPending = ""; op = ""; adaError = false; entryBaru = true; }
     layar = _stripBacktick(layar); // layar mungkin sudah berisi ` dari formatHasil sebelumnya
     if (entryBaru) { layar = (t == ".") ? "0." : t; entryBaru = false; adaQtyHitung = false; }
@@ -1414,6 +1416,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     layar = _groupBacktick(layar); // langsung tampil 1`000 saat ketik, bukan nunggu =
   }
   void _inputOperator(String t) {
+    _habisMPlus = false; // ketik baru sesudah M+ -> = berikutnya jadi = hitung biasa, bukan penutup PO
     if (adaError) return;
     final cur = double.tryParse(_stripBacktick(layar)) ?? 0;
     // FIX KEPENCET OPERATOR 2x: 1000 + lalu kepencet - -> cuma ganti operator, angka tetap 1000.
@@ -1434,6 +1437,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   void _inputSamaDengan() {
     if (adaError) return;
+    // ALUR PO (Alternatif 2): ... = M+ ... = M+ ... = (akhiri)
+    // = SESUDAH M+ = tutup 1 PO, BUKAN hitung. Jadi = = = tetap Casio kalau tidak ada M+ di antaranya.
+    if (_habisMPlus) { _habisMPlus = false; _akhiriSatuPO(); return; }
     final cur = double.tryParse(_stripBacktick(layar)) ?? 0;
     double a, b; String o;
     if (opPending.isNotEmpty) {
@@ -1460,6 +1466,15 @@ class _S extends ConsumerState<HomeDaftarPO> {
     opPending = ""; op = "";
     entryBaru = true;
     // qtyHitung TETAP angka pertama, jangan ditimpa hasil. Inilah fix qty jadi subtotal.
+  }
+  // Akhiri 1 PO (= SESUDAH M+): commit baris PO yang sedang diinput, simpan ke DB (fungsi lama), kosongkan baris aktif,
+  // balik ke kalkulator. Nomor PO berikutnya diurus fungsi simpan PO yang sudah ada.
+  void _akhiriSatuPO() {
+    _commitSemuaBarisPO();
+    _simpanSemuaKeDB();
+    final total = ref.read(poProvider).items.fold<double>(0, (a, e) => a + ((e.jumlah as num?)?.toDouble() ?? 0));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('PO ${_nomorPO()} selesai - Total ${formatRupiah(total.toInt())} - ketik PO berikutnya')));
+    setState(() { poTerbuka = false; _tombolKuningAktif = ''; _resetKeyboard(); });
   }
   void _inputPersen() {
     if (adaError) return;
@@ -1558,9 +1573,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
           if (it != null) { ref.read(poProvider.notifier).tambahItem(it); }
           steps.add({"item": "${barangDipilih!["nama"]} : $qtyAman x ${formatRupiah(harga)} = ${formatRupiah(jumlah)}", "rumus": "${barangDipilih!["nama"]} : $qtyAman x ${formatRupiah(harga)} = ${formatRupiah(jumlah)}", "harga": harga, "qty": qtyAman, "jumlah": jumlah, "chain": <Map<String, dynamic>>[]});
         }
-        // M+ barusan nambah barang ke PO -> langsung buka panel PO Daftar Item biar barangnya kelihatan.
-        // M+ tanpa barang terpilih = cuma memori kalkulator, jangan buka PO.
-        if (barangDipilih != null) { poTerbuka = true; _tombolKuningAktif = ''; }
+        _habisMPlus = true; // habis M+ -> = berikutnya = tutup PO
+        // M+ JANGAN BUKA APAPUN: input baris, tap M+ = tambah 1 baris, tetap di kalkulator.
+        // Repeat: tap baris lagi, tap M+ lagi = tambah baris lagi. PO / CEK hanya kebuka kalau tombol PO / CEK ditekan sendiri.
+        // poTerbuka & _tombolKuningAktif sengaja TIDAK diubah di sini.
         layar = "0"; entryBaru = true; adaQtyHitung = false;
       }
       else if (t == "M-") {
@@ -1812,7 +1828,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
             // Baris 1 display Casio: ekspresi (misal "5 x 80`000") - kecil, kanan
             SizedBox(width: double.infinity, child: DotMatrixText(text: _layarAtasCasio().isEmpty ? ' ' : _layarAtasCasio(), size: DotMatrixSize.small, color: Colors.black54)),
             // Baris 2: Acuan (kiri, kecil) + Layar utama (kanan, besar)
-            Row(children: [Expanded(child: Text(teksAcuan(), style: const TextStyle(fontSize: 12, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Flexible(child: DotMatrixText(text: _layarBawahCasio(), size: DotMatrixSize.large, color: adaError ? Colors.red : Colors.black))]),
+            Row(children: [Expanded(child: Text(teksAcuan(), style: const TextStyle(fontSize: 12, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: DotMatrixText(text: _layarBawahCasio(), size: DotMatrixSize.nota, color: adaError ? Colors.red : Colors.black)))]),
             const SizedBox(height: 2),
             Row(children: [Expanded(child: Text(barangDipilih == null ? "Pilih barang via LS" : "${barangDipilih!["nama"]} • ${barangDipilih!["kategori"]}", style: const TextStyle(fontSize: 9, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Text(teksSaran(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: warnaSaran()))]),
           ]),
