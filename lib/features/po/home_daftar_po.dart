@@ -161,7 +161,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
   double lastAngka2 = 0;
   double qtyHitung = 1;
   bool adaQtyHitung = false;
-  double? _qtyMPlus;
   double? _qtyMPlus; // qty hitungan terakhir (=): operand yang BUKAN harga barang. Dipakai M+ biar qty tidak jadi hasil/jumlah (fix Qty 3750000.0).
   bool _habisMPlus = false; // ALUR PO: ... = M+ ... = M+ ... = (akhiri). = terakhir SESUDAH M+ = tutup PO.
   double memori = 0;
@@ -1472,7 +1471,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   void _akhiriSatuPO() {
     _commitSemuaBarisPO();
     _simpanSemuaKeDB();
-    final total = ref.read(poProvider).items.fold<double>(0, (a, e) => a + ((e.jumlah as num?)?.toDouble() ?? 0));
+    final total = ref.read(poProvider).items.fold<double>(0, (a, e) => a + (e.qty.toDouble() * e.hargaSatuan.toDouble())); // PoItem tidak punya .jumlah, jumlah = qty x hargaSatuan (sama seperti baris 96 & 288)
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('PO ${_nomorPO()} selesai - Total ${formatRupiah(total.toInt())} - ketik PO berikutnya')));
     setState(() { poTerbuka = false; _tombolKuningAktif = ''; _resetKeyboard(); });
   }
