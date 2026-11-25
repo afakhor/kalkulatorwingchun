@@ -123,7 +123,8 @@ class DotMatrixText extends StatelessWidget {
     return LayoutBuilder(builder: (context, constraints) {
       final maxW = constraints.maxWidth.isFinite ? constraints.maxWidth : 320.0;
       return CustomPaint(
-        size: Size(maxW, size == DotMatrixSize.small ? 14 : size == DotMatrixSize.nota ? 22 : 30  // small dikecilkan: 18 -> 14 (yang dilingkari merah)),
+        // small dikecilkan: 18 -> 14 (yang dilingkari merah). Komentar TIDAK boleh di ujung baris Size, karena // mematikan )), penutupnya.
+        size: Size(maxW, size == DotMatrixSize.small ? 14 : size == DotMatrixSize.nota ? 22 : 30),
         painter: _DotMatrixPainter(text: text, isSmall: size == DotMatrixSize.small, isNota: size == DotMatrixSize.nota, color: color, align: align),
       );
     });
