@@ -372,12 +372,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
     VoidCallback? onMPlus,
   }) {
     final qty = double.tryParse(cQty.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
-    final harga = double.tryParse(cHarga.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
     final chainHitung = <Map<String, dynamic>>[];
     for (var j = 0; j < chain.length; j++) {
       chainHitung.add({'ops': chain[j]['ops'], 'angka': double.tryParse(chainCtrls[j].text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0});
     }
-    final jumlah = tampilChain ? _hitungChain(harga, qty, chainHitung) : qty * harga;
     return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white, border: Border.all(color: dicek ? Colors.teal : Colors.grey.shade300, width: dicek ? 2 : 1), borderRadius: BorderRadius.circular(10)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
