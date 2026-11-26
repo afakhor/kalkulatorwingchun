@@ -464,13 +464,59 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (itemStr.contains(' : ')) { return itemStr.split(' : ').first.trim(); }
     return itemStr;
   }
-  List<String> _saranPelanggan() {
-    final q = _pelangganC.text.trim().toLowerCase();
-    final semua = <String>{};
-    for (final p in _poTersimpan) { final nm = '${p['pelanggan'] ?? ''}'.trim(); if (nm.isNotEmpty) { semua.add(nm); } }
-    final list = semua.toList();
-    if (q.isEmpty) { return list; }
-    return list.where((nm) => nm.toLowerCase().contains(q)).toList();
+  // DAFTAR PELANGGAN (dari PO tersimpan): 1 nama = 1 WA terbaru. Dipakai autocomplete Nama + WA.
+  // Nama sama yang muncul di PO lama berkali-kali hanya dihitung 1x, WA-nya yang paling baru.
+  List<Map<String, String>> _daftarPelanggan() {
+    final map = <String, String>{};
+    for (final p in _poTersimpan) {
+      final nm = '${p['pelanggan'] ?? ''}'.trim();
+      if (nm.isEmpty || nm == 'Tanpa Nama') { continue; }
+      map[nm] = '${p['nomorWA'] ?? ''}'.trim(); // PO yang lebih baru menimpa WA lama
+    }
+    final list = map.entries.map((e) => {'nama': e.key, 'wa': e.value}).toList();
+    return list.reversed.toList(); // pelanggan terbaru dulu
+  }
+  // SARAN AUTOCOMPLETE: ketik di Nama -> saring nama; ketik di WA -> saring WA (atau nama).
+  // Yang diawali ketikan tampil dulu, baru yang mengandung ketikan.
+  List<Map<String, String>> _saranPelanggan() {
+    final daftar = _daftarPelanggan();
+    final diWA = identical(_ctrlKeyboard, _nomorWAC);
+    final q = (diWA ? _nomorWAC.text : _pelangganC.text).trim().toLowerCase();
+    bool cocok(Map<String, String> m) {
+      if (q.isEmpty) { return true; }
+      if (diWA) { return m['wa']!.toLowerCase().contains(q) || m['nama']!.toLowerCase().contains(q); }
+      return m['nama']!.toLowerCase().contains(q);
+    }
+    final hasil = daftar.where(cocok).toList();
+    bool diawali(Map<String, String> m) {
+      if (q.isEmpty) { return false; }
+      if (diWA) { return m['wa']!.toLowerCase().startsWith(q) || m['nama']!.toLowerCase().startsWith(q); }
+      return m['nama']!.toLowerCase().startsWith(q);
+    }
+    hasil.sort((a, b) => (diawali(b) ? 1 : 0) - (diawali(a) ? 1 : 0)); // awalan dulu, sisanya urutan terbaru
+    return hasil;
+  }
+  // TAP SARAN: isi Nama DAN WA sekaligus. WA kosong di riwayat -> Nama saja yang diisi, WA tidak dihapus.
+  void _pilihSaranPelanggan(Map<String, String> m) {
+    setState(() {
+      _pelangganC.text = m['nama'] ?? '';
+      final wa = m['wa'] ?? '';
+      if (wa.isNotEmpty) { _nomorWAC.text = wa; }
+      _sembunyiSaranPelanggan = true;
+      _resetKeyboard(); // selesai pilih -> keypad balik ke kalkulator, siap input barang
+    });
+  }
+  // AUTO-LENGKAPI: ketik Nama sampai PERSIS sama dengan pelanggan lama (dan WA masih kosong)
+  // -> WA terisi sendiri. Ketik WA sampai PERSIS sama -> Nama terisi sendiri. Tidak menimpa isi yang sudah ada.
+  void _autoLengkapiPelanggan() {
+    final daftar = _daftarPelanggan();
+    final namaKetik = _pelangganC.text.trim().toLowerCase();
+    final waKetik = _nomorWAC.text.trim();
+    if (identical(_ctrlKeyboard, _pelangganC) && namaKetik.isNotEmpty && waKetik.isEmpty) {
+      for (final m in daftar) { if (m['nama']!.toLowerCase() == namaKetik && (m['wa'] ?? '').isNotEmpty) { _nomorWAC.text = m['wa']!; break; } }
+    } else if (identical(_ctrlKeyboard, _nomorWAC) && waKetik.isNotEmpty && _pelangganC.text.trim().isEmpty) {
+      for (final m in daftar) { if (m['wa'] == waKetik && (m['nama'] ?? '').isNotEmpty) { _pelangganC.text = m['nama']!; break; } }
+    }
   }
   // Hitung rantai: Harga Acuan x Angka Unit, lalu tiap pasang (ops, step) berurutan.
   double _hitungChain(double harga, double qty, List<Map<String, dynamic>> chain) {
@@ -933,7 +979,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       total += qty * harga;
     }
     final saran = _saranPelanggan();
-    final tampilSaran = _ctrlKeyboard == _pelangganC && !_sembunyiSaranPelanggan && saran.isNotEmpty;
+    final tampilSaran = (_ctrlKeyboard == _pelangganC || _ctrlKeyboard == _nomorWAC) && !_sembunyiSaranPelanggan && saran.isNotEmpty;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
@@ -975,9 +1021,15 @@ class _S extends ConsumerState<HomeDaftarPO> {
             ActionChip(label: const Text('+ PO Baru', style: TextStyle(fontSize: 11)), onPressed: () => setState(() { _poTerbukaIndex = -1; _poRevisi = false; _pelangganC.clear(); _nomorWAC.clear(); })),
           ])),
         ],
+        // DROPDOWN SARAN PELANGGAN: tiap baris = Nama (tebal) + WA. Tap 1 baris = isi Nama + WA sekaligus.
         if (tampilSaran) ...[
           const SizedBox(height: 4),
-          Wrap(spacing: 4, runSpacing: 4, children: saran.map((nm) => ActionChip(label: Text(nm, style: const TextStyle(fontSize: 11)), onPressed: () => setState(() { _pelangganC.text = nm; _sembunyiSaranPelanggan = true; }))).toList()),
+          Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.teal.shade200)), constraints: const BoxConstraints(maxHeight: 150),
+            child: ListView.separated(shrinkWrap: true, padding: EdgeInsets.zero, itemCount: saran.length, separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade200),
+              itemBuilder: (_, si) { final m = saran[si]; return InkWell(onTap: () => _pilihSaranPelanggan(m),
+                child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7), child: Row(children: [Expanded(child: Text(m['nama'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Text((m['wa'] ?? '').isEmpty ? 'tanpa WA' : m['wa']!, style: TextStyle(fontSize: 12, color: (m['wa'] ?? '').isEmpty ? Colors.grey : Colors.teal.shade800)), const SizedBox(width: 4), const Icon(Icons.north_west, size: 14, color: Colors.grey)]))); },
+            ),
+          ),
         ],
         const SizedBox(height: 4),
         Expanded(child: n == 0 ? const Center(child: Text('Belum ada item - pencet LS pilih barang, lalu ketik qty, lalu M+', textAlign: TextAlign.center)) : ListView.builder(itemCount: n, itemBuilder: (_, i) {
@@ -1062,7 +1114,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   void _aktifkanField(TextEditingController c, int mode, {String? tag}) {
     // Pindah field: commit dulu baris lama supaya edit tidak hilang.
     if (_tagKeyboardAktif != null && _tagKeyboardAktif != tag) { _commitBaris(_tagKeyboardAktif!); }
-    setState(() { _ctrlKeyboard = c; _modeKeyboard = mode; _tagKeyboardAktif = tag; if (mode == 1) { _qwertyCaps = 1; } });
+    setState(() { _ctrlKeyboard = c; _modeKeyboard = mode; _tagKeyboardAktif = tag; if (mode == 1) { _qwertyCaps = 1; } if (identical(c, _pelangganC) || identical(c, _nomorWAC)) { _sembunyiSaranPelanggan = false; } });
   }
   void _ketikKeyboard(String s) {
     final c = _ctrlKeyboard;
@@ -1074,7 +1126,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     final baru = text.replaceRange(start, end, s);
     c.value = c.value.copyWith(text: baru, selection: TextSelection.collapsed(offset: start + s.length));
     // Shift 1x: habis ketik 1 huruf, balik kecil lagi. Caps Lock (tap lama) tetap besar semua.
-    setState(() { if (identical(c, _lsCariC)) { queryLS = baru; } if (identical(c, _pelangganC)) { _sembunyiSaranPelanggan = false; } if (_modeKeyboard == 1 && _qwertyCaps == 1) { _qwertyCaps = 0; } });
+    setState(() { if (identical(c, _lsCariC)) { queryLS = baru; } if (identical(c, _pelangganC) || identical(c, _nomorWAC)) { _sembunyiSaranPelanggan = false; } if (_modeKeyboard == 1 && _qwertyCaps == 1) { _qwertyCaps = 0; } }); _autoLengkapiPelanggan();
   }
   void _hapusKeyboard() {
     final c = _ctrlKeyboard;
@@ -1087,7 +1139,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     else if (text.isNotEmpty) { baru = text.substring(0, text.length - 1); pos = baru.length; }
     else { return; }
     c.value = c.value.copyWith(text: baru, selection: TextSelection.collapsed(offset: pos));
-    setState(() { if (identical(c, _lsCariC)) { queryLS = baru; } if (identical(c, _pelangganC)) { _sembunyiSaranPelanggan = false; } });
+    setState(() { if (identical(c, _lsCariC)) { queryLS = baru; } if (identical(c, _pelangganC) || identical(c, _nomorWAC)) { _sembunyiSaranPelanggan = false; } }); _autoLengkapiPelanggan();
   }
   // Huruf sesuai mode Caps: 0 = kecil, 1/2 = besar.
   String _huruf(String k) { return _qwertyCaps == 0 ? k.toLowerCase() : k.toUpperCase(); }
@@ -1847,7 +1899,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   @override Widget build(BuildContext context) {
     final headerKalkulator = Container(color: const Color(0xFF1A1A1A), padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
       child: Column(children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("BASKORO WINGCHUN", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)), GestureDetector(onTap: dialogBabe, child: const Text("BABE•INFO", style: TextStyle(color: Colors.white70, fontSize: 9, decoration: TextDecoration.underline)))]), // Header: BASKORO WINGCHUN + BABE•INFO TETAP, yang dihapus cuma kata "dialog kalkulasi" (yang dicoret merah). Tap BABE•INFO tetap buka dialog info.
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("BASKORO WINGCHUN", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)), GestureDetector(onTap: dialogBabe, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white, width: 1.2)), child: const Text("BABE•INFO", style: TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.2)))) // BABE•INFO TEBAL & JELAS: pill kuning, teks hitam tebal, bukan lagi abu-abu kecil bergaris bawah.]), // Header: BASKORO WINGCHUN + BABE•INFO TETAP, yang dihapus cuma kata "dialog kalkulasi" (yang dicoret merah). Tap BABE•INFO tetap buka dialog info.
         const SizedBox(height: 4),
         // Panel solar Casio saja (label DJ-120 dihapus biar ramping, bentuk kalkulatornya sudah jelas).
         Container(height: 12, decoration: BoxDecoration(color: const Color(0xFF3A2A1A), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.black54)), child: Row(children: List.generate(5, (i) => Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2), color: const Color(0xFF5A3D22)))))),
