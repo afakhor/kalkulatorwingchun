@@ -549,7 +549,18 @@ class _S extends ConsumerState<HomeDaftarPO> {
     final list = <Map<String, dynamic>>[];
     for (var i = 0; i < po.items.length; i++) {
       final nama = _poCtrls['$i-nama']?.text.trim() ?? '';
-      final harga = double.tryParse((_poCtrls['$i-harga']?.text ?? '').replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+      // HARGA EDIT (lingkaran hitam): harga baris = Harga Satuan x Angka Satuan dari controller pecah,
+      // karena HASIL EDIT hidup di sana. cHarga (Harga Acuan) hanya disinkron postFrame dan bisa
+      // belum keburu update saat Nota dibuka -> Nota baca harga AWAL dari LS, bukan hasil edit.
+      // Kalau pecah tidak ada (baris lama), fallback ke cHarga seperti dulu.
+      var harga = double.tryParse((_poCtrls['$i-harga']?.text ?? '').replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+      final pecahSatuanC = _pecahCtrls['po-$i-satuanHarga'];
+      final pecahUnitC = _pecahCtrls['po-$i-unit'];
+      if (pecahSatuanC != null && pecahUnitC != null) {
+        final ps = double.tryParse(pecahSatuanC.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+        final pu = double.tryParse(pecahUnitC.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+        if (ps > 0 && pu > 0) { harga = ps * pu; }
+      }
       final satuan = _poCtrls['$i-satuan']?.text.trim() ?? '';
       final qty = double.tryParse((_poCtrls['$i-qty']?.text ?? '').replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
       final step = _poCtrls['$i-step']?.text.trim() ?? '';
@@ -581,6 +592,11 @@ class _S extends ConsumerState<HomeDaftarPO> {
     final satuan = '${st['satuan'] ?? ''}';
     final step = '${st['rumus'] ?? st['item'] ?? ''}';
     final lama = _bacaBarisPO();
+    // BAWA PECAH CEK -> PO (lingkaran biru = hijau, merah dicek): Harga Satuan + Angka Satuan
+    // dari baris CEK ikut pindah. JANGAN pecah ulang dari acuan, karena _pecahOtomatis selalu
+    // ambil pembagi pertama (75000 -> 37500 x 2) padahal di CEK barisnya 12500 x 6.
+    final pecahSatuanCek = double.tryParse((_pecahCtrls['step-$index-satuanHarga']?.text ?? '').replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+    final pecahUnitCek = double.tryParse((_pecahCtrls['step-$index-unit']?.text ?? '').replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
     // Cek duplikat: nama + harga sama -> jangan tambah 2x, tapi update qty
     final idxSama = lama.indexWhere((m) => '${m['nama']}'.trim().toLowerCase() == nama.trim().toLowerCase() && ((m['harga'] as num?)?.toDouble() ?? 0) == harga.toDouble());
     if (idxSama >= 0) {
@@ -589,6 +605,15 @@ class _S extends ConsumerState<HomeDaftarPO> {
       lama.add({'nama': nama, 'harga': harga.toDouble(), 'satuan': satuan, 'qty': qty, 'step': step, 'jumlah': qty * harga, 'tipeHarga': 'SATUAN'});
     }
     _tulisUlangPO(lama);
+    // Seed pecah PO dari pecah CEK (putIfAbsent di _barisItem tidak akan menimpa ini).
+    // Baris duplikat tidak di-seed: pecah baris PO yang sudah ada dipertahankan.
+    if (idxSama < 0 && pecahSatuanCek > 0 && pecahUnitCek > 0) {
+      final idxBaru = lama.length - 1;
+      String teksAngka(double v) => v % 1 == 0 ? v.toInt().toString() : v.toString();
+      _pecahCtrls['po-$idxBaru-satuanHarga'] = TextEditingController(text: teksAngka(pecahSatuanCek));
+      _pecahCtrls['po-$idxBaru-unit'] = TextEditingController(text: teksAngka(pecahUnitCek));
+      _satuanBaseline['po-$idxBaru-satuanHarga'] = pecahSatuanCek; // patokan % ikut CEK, bukan pecah ulang
+    }
     // Rebuild controller PO biar langsung kelihatan
     _poCtrls = {};
     for (var i = 0; i < lama.length; i++) {
@@ -1005,7 +1030,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
   PoOrder? _poTerakhir;
   Future<void> _kirimWA() async {
     final messenger = ScaffoldMessenger.of(context);
-    final po = _poTerakhir ?? _poOrderAktif();
+    // KIRIM WA = HASIL EDIT juga: kalau PO sedang terbuka, commit + baca ulang (jangan pakai
+    // _poTerakhir yang bisa jadi preview lama sebelum edit terakhir).
+    if (poTerbuka) _commitSemuaBarisPO();
+    final po = poTerbuka ? _poOrderAktif() : (_poTerakhir ?? _poOrderAktif());
     if (po.items.isEmpty) { messenger.showSnackBar(const SnackBar(content: Text('PO kosong, isi dulu 1 baris.'))); return; }
     try {
       await shareNotaPdf(po);
@@ -1015,6 +1043,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
     }
   }
   void _tampilNota() {
+    // NOTA = HASIL EDIT: commit dulu supaya provider dapat harga hasil edit di baris PO,
+    // baru baca PoOrder. Tanpa ini Nota baca harga AWAL dari LS (lingkaran hitam).
+    if (poTerbuka) _commitSemuaBarisPO();
     final po = _poOrderAktif();
     if (po.items.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PO kosong, isi dulu 1 baris.'))); return; }
     showDialog(context: context, builder: (ctx) => Dialog(
@@ -1734,11 +1765,11 @@ class _S extends ConsumerState<HomeDaftarPO> {
               const Text("Harga 1 • Acuan 100%", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green)),
               const SizedBox(height: 4),
               TextField(controller: harga1Ctrl, keyboardType: TextInputType.number, decoration: dec("0"), onChanged: (v) => setSheet(() => refreshSemuaNominal())),
-              const SizedBox(height: 6),
-              Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFFFFF8C5), borderRadius: BorderRadius.circular(8)), child: const Text("Harga 1 ini yang jadi acuan prosentase 100%. Harga 2 dan 3 tidak perlu ditampilkan, input manual edit harga 1 menjadi harga 2 dan 3 sudah ada di PO.", style: TextStyle(fontSize: 11))),
+              // Kotak penjelasan Harga 1 DIHAPUS (disilang merah): konsepnya sudah jelas dari form -
+              // 1 varian (iterasi +Tambah Varian), 1 Harga 1 acuan, banyak Satuan.
               const SizedBox(height: 12),
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Varian", style: TextStyle(fontWeight: FontWeight.bold)), ElevatedButton(onPressed: () => setSheet(() => varianCtrls.add(TextEditingController())), child: const Text("+Tambah Varian", style: TextStyle(fontSize: 11)))]),
-              ...varianCtrls.asMap().entries.map((e) { return Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(children: [Expanded(child: TextField(controller: e.value, decoration: dec("Hitam"), onChanged: (v) => tambahKeDaftarSatuan(v))), IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: () => setSheet(() { if (varianCtrls.length > 1) { varianCtrls.removeAt(e.key); } })) ])); }),
+              ...varianCtrls.asMap().entries.map((e) { return Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(children: [Expanded(child: TextField(controller: e.value, decoration: dec("Varian"), onChanged: (v) => tambahKeDaftarSatuan(v))), IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: () => setSheet(() { if (varianCtrls.length > 1) { varianCtrls.removeAt(e.key); } })) ])); }),
               const SizedBox(height: 12),
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Satuan", style: TextStyle(fontWeight: FontWeight.bold)), ElevatedButton(onPressed: () => setSheet(() { satuanList.add(SatuanItem(satuan: unitCtrl.text, dasar: false, qty: "1", isi: "1", op: "÷", nominal: "0", satuanBaru: "")); }), child: const Text("+Tambah Satuan", style: TextStyle(fontSize: 11)))]),
               const Text("Qty + satuan BIRU, x/÷, isi + unit HIJAU = nominal. Baris bawah (merah) = INFO dari Harga 1, bukan dari field Rp.", style: TextStyle(fontSize: 10, color: Colors.grey)),
@@ -1797,7 +1828,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   Widget tombol(String label, {Color? bg, Color? fg, bool besar = false}) {
     final isDown = tombolDitekan == label && tekanTombol;
     final baseColor = bg ?? Colors.white;
-    return Expanded(child: Padding(padding: const EdgeInsets.all(3.0),
+    return Expanded(child: Padding(padding: const EdgeInsets.all(4.0),
       child: GestureDetector(
         onTapDown: (_) => setState(() { tombolDitekan = label; tekanTombol = true; }),
         onTapUp: (_) { setState(() { tekanTombol = false; }); pencet(label); },
@@ -1855,4 +1886,4 @@ class _S extends ConsumerState<HomeDaftarPO> {
       ])),
     );
   }
-} 
+}
