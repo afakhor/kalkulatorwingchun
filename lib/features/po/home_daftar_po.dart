@@ -378,7 +378,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
       chainHitung.add({'ops': chain[j]['ops'], 'angka': double.tryParse(chainCtrls[j].text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0});
     }
     final jumlah = tampilChain ? _hitungChain(harga, qty, chainHitung) : qty * harga;
-    final jumlahWidget = Expanded(child: InputDecorator(decoration: const InputDecoration(labelText: 'Jumlah', isDense: true, border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10)), child: Text(formatRupiah(jumlah.toInt()), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))));
     return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white, border: Border.all(color: dicek ? Colors.teal : Colors.grey.shade300, width: dicek ? 2 : 1), borderRadius: BorderRadius.circular(10)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
