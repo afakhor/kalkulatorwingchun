@@ -121,10 +121,17 @@ class DotMatrixText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      final maxW = constraints.maxWidth.isFinite ? constraints.maxWidth : 320.0;
+      // ADAPTIF: kalau parent memberi lebar tak terbatas (misal di dalam Row), JANGAN fallback 320
+      // (itu yang bikin meluber). Pakai lebar natural teks ini sendiri.
+      final dotBase = size == DotMatrixSize.small ? 1.8 : size == DotMatrixSize.nota ? 3.0 : 4.2;
+      final gapBase = size == DotMatrixSize.small ? 1.1 : size == DotMatrixSize.nota ? 1.3 : 1.6;
+      final charGapBase = size == DotMatrixSize.small ? 3.0 : size == DotMatrixSize.nota ? 4.0 : 5.0;
+      final naturalW = text.isEmpty ? 0.0 : text.length * (5 * (dotBase + gapBase) + charGapBase) - charGapBase;
+      final maxW = constraints.maxWidth.isFinite ? constraints.maxWidth : naturalW;
       return CustomPaint(
-        // small dikecilkan: 18 -> 14 (yang dilingkari merah). Komentar TIDAK boleh di ujung baris Size, karena // mematikan )), penutupnya.
-        size: Size(maxW, size == DotMatrixSize.small ? 14 : size == DotMatrixSize.nota ? 22 : 30),
+        // TINGGI KOTAK HARUS = TINGGI GAMBAR TITIK, kalau tidak baris atas meluber ke baris bawah (angka bertabrakan).
+        // Isi gambar: 7 baris x (dotH + gapY). small: 7 x (1.8+1.1) = 20.3 -> kotak 21. nota: 7 x (3.0+1.3) = 30.1 -> kotak 31. large: 7 x (4.2+1.6) = 40.6 -> kotak 41.
+        size: Size(maxW, size == DotMatrixSize.small ? 21 : size == DotMatrixSize.nota ? 31 : 41),
         painter: _DotMatrixPainter(text: text, isSmall: size == DotMatrixSize.small, isNota: size == DotMatrixSize.nota, color: color, align: align),
       );
     });
@@ -167,13 +174,26 @@ class _DotMatrixPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     // Atas (small): titik bulat kecil, rapat -> kelihatan titik-titik kayak foto atas
     // Bawah (large): titik kotak memanjang + jarak -> kelihatan garis putus-putus kayak foto bawah
-    final dotW = isSmall ? 1.8 : isNota ? 3.0 : 4.2; // titik small dikecilkan: 2.2 -> 1.8
-    final dotH = isSmall ? 1.8 : isNota ? 3.0 : 4.2; // titik small dikecilkan: 2.2 -> 1.8
-    final gapX = isSmall ? 1.1 : isNota ? 1.3 : 1.6;
-    final gapY = isSmall ? 1.1 : isNota ? 1.3 : 1.6;
-    final charW = 5 * (dotW + gapX);
-    final charGap = isSmall ? 3.0 : isNota ? 4.0 : 5.0;
-    final totalW = text.length * (charW + charGap) - charGap;
+    var dotW = isSmall ? 1.8 : isNota ? 3.0 : 4.2; // titik small dikecilkan: 2.2 -> 1.8
+    var dotH = isSmall ? 1.8 : isNota ? 3.0 : 4.2; // titik small dikecilkan: 2.2 -> 1.8
+    var gapX = isSmall ? 1.1 : isNota ? 1.3 : 1.6;
+    var gapY = isSmall ? 1.1 : isNota ? 1.3 : 1.6;
+    var charGap = isSmall ? 3.0 : isNota ? 4.0 : 5.0;
+    var charW = 5 * (dotW + gapX);
+    var totalW = text.length * (charW + charGap) - charGap;
+    // MUAT LEBAR: kalau teks lebih lebar dari kotak, kecilkan semua titik proporsional,
+    // jangan dipotong (startX = 0 lama bikin gambar meluber keluar kotak & menumpuk baris bawah).
+    // ADAPTIF: skala = yang paling kecil dari muat-lebar dan muat-tinggi, supaya titik
+    // tersusun rapi di kotak apa pun: layar kalkulator (lebar), sel tabel nota (sempit), PDF.
+    var fit = 1.0;
+    if (totalW > size.width && totalW > 0) fit = size.width / totalW;
+    final naturalH = 7 * (dotH + gapY);
+    if (naturalH > size.height && naturalH > 0) fit = fit < size.height / naturalH ? fit : size.height / naturalH;
+    if (fit < 1.0) {
+      dotW *= fit; dotH *= fit; gapX *= fit; gapY *= fit; charGap *= fit;
+      charW = 5 * (dotW + gapX);
+      totalW = text.length * (charW + charGap) - charGap;
+    }
     double startX = 0;
     if (align == TextAlign.right) startX = size.width - totalW;
     if (align == TextAlign.center) startX = (size.width - totalW) / 2;
