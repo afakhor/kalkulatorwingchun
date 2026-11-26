@@ -55,9 +55,22 @@ pw.Widget _dotChar(String ch, {double dot = 1.1, double gap = 0.35}) {
   );
 }
 
-// Satu angka dot-matrix: "Rp " kecil + karakter dot berdampingan, rata kanan.
-pw.Widget _dotAngka(num v, {double dot = 1.1}) {
+// Satu angka dot-matrix ADAPTIF: "Rp " kecil + karakter dot, total TIDAK PERNAH melebihi maxW (kolom).
+// Dulu dot = 1.1 TETAP untuk semua panjang angka. Contoh 18`000`000 (10 karakter):
+// 10 x 5 x (1.1 + 0.35) + 9 x 1.2 + 'Rp ' = ±98, kolom Harga cuma 74 -> meluber.
+// Sekarang dot dihitung mundur dari maxW:
+//   dot = (maxW - lebar 'Rp ' - jarak antar karakter) / (jumlah karakter x 5) - gap
+// Makin panjang angkanya, makin kecil titiknya, tapi susunan 5x7 tetap rapi dan tidak meluber.
+// maxDot = batas atas (angka pendek tetap pakai titik normal, tidak membesar).
+pw.Widget _dotAngka(num v, {double maxW = 74, double maxDot = 1.1}) {
   final teks = formatRupiah(v.toInt()).replaceAll('Rp ', '').trim();
+  const rpW = 15.0; // 'Rp ' font 8 + SizedBox 2
+  const antarChar = 1.2;
+  const gap = 0.35; // harus sama dengan gap default _dotChar
+  final n = teks.isEmpty ? 1 : teks.length;
+  var dot = (maxW - rpW - (n - 1) * antarChar) / (n * 5) - gap;
+  if (dot > maxDot) dot = maxDot;
+  if (dot < 0.45) dot = 0.45; // lantai: di bawah ini titik tidak kebaca lagi
   return pw.Row(
     mainAxisSize: pw.MainAxisSize.min,
     mainAxisAlignment: pw.MainAxisAlignment.end,
@@ -67,7 +80,7 @@ pw.Widget _dotAngka(num v, {double dot = 1.1}) {
       pw.Row(mainAxisSize: pw.MainAxisSize.min, children: [
         for (int k = 0; k < teks.length; k++) ...[
           _dotChar(teks[k], dot: dot),
-          if (k != teks.length - 1) pw.SizedBox(width: 1.2),
+          if (k != teks.length - 1) pw.SizedBox(width: antarChar),
         ],
       ]),
     ],
@@ -117,8 +130,8 @@ Future<File> buatPDFNota(PoOrder po, Directory dir, {String namaToko = 'BASKORO 
                 pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4), child: pw.Text(i.namaBarang, style: const pw.TextStyle(fontSize: 9))),
                 pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4), child: pw.Text(formatHasil(i.qty.toDouble()), textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 9))),
                 pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4), child: pw.Text('', textAlign: pw.TextAlign.center)),
-                pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4), alignment: pw.Alignment.centerRight, child: _dotAngka(i.hargaSatuan)),
-                pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4), alignment: pw.Alignment.centerRight, child: _dotAngka(sub)),
+                pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4), alignment: pw.Alignment.centerRight, child: _dotAngka(i.hargaSatuan, maxW: 74)), // kolom Harga 80 - padding 6
+                pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4), alignment: pw.Alignment.centerRight, child: _dotAngka(sub, maxW: 80)), // kolom Subtotal 86 - padding 6
               ]);
             }),
           ],
@@ -133,12 +146,12 @@ Future<File> buatPDFNota(PoOrder po, Directory dir, {String namaToko = 'BASKORO 
           ])),
           pw.SizedBox(width: 8),
           pw.SizedBox(width: 170, child: pw.Column(children: [
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Total', style: const pw.TextStyle(fontSize: 10)), _dotAngka(subtotal)]),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Diskon', style: const pw.TextStyle(fontSize: 10)), _dotAngka(po.diskonTotal)]),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Ongkos', style: const pw.TextStyle(fontSize: 10)), _dotAngka(po.ongkir)]),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Grand Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)), _dotAngka(h.totalAkhir, dot: 1.25)]),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('DP', style: const pw.TextStyle(fontSize: 10)), _dotAngka(po.dp)]),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Sisa Bayar', style: const pw.TextStyle(fontSize: 10)), _dotAngka(h.sisaBayar)]),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Total', style: const pw.TextStyle(fontSize: 10)), _dotAngka(subtotal, maxW: 95)]),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Diskon', style: const pw.TextStyle(fontSize: 10)), _dotAngka(po.diskonTotal, maxW: 95)]),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Ongkos', style: const pw.TextStyle(fontSize: 10)), _dotAngka(po.ongkir, maxW: 95)]),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Grand Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)), _dotAngka(h.totalAkhir, maxW: 95, maxDot: 1.25)]),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('DP', style: const pw.TextStyle(fontSize: 10)), _dotAngka(po.dp, maxW: 95)]),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Sisa Bayar', style: const pw.TextStyle(fontSize: 10)), _dotAngka(h.sisaBayar, maxW: 95)]),
           ])),
         ]),
         pw.SizedBox(height: 10),
