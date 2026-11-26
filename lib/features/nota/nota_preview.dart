@@ -61,10 +61,15 @@ class _NotaPreviewState extends State<NotaPreview> {
   }
 
   // ANGKA NOTA KECIL: pakai DotMatrix SMALL, lebar menyesuaikan kolom (tidak meluber).
+  // ANGKA NOTA ADAPTIF: total lebar = 'Rp ' + titik, dan total itu yang dibatasi maxW (kolom).
+  // Dulu maxW dipakai untuk titik SAJA (Rp ikut nambah di luar) + perkiraan perChar 10.5 salah
+  // (aslinya 1 karakter small = 5 x (1.8 + 1.1) + 3 = 17.5) -> total meluber keluar kolom.
+  // Sekarang: lebar titik = maxW - lebar 'Rp ', DotMatrixText sendiri yang mengecilkan titiknya
+  // sampai muat (lihat formatter.dart). Tidak ada lagi angka yang keluar sel.
   Widget _angkaNota(num v, {DotMatrixSize size = DotMatrixSize.small, double maxW = 78}) {
     final teks = formatRupiah(v.toInt()).replaceAll('Rp ', '').trim();
-    final perChar = size == DotMatrixSize.large ? 13.0 : 10.5;
-    final w = (teks.length * perChar + 2).clamp(44.0, maxW);
+    const rpW = 16.0; // lebar 'Rp ' font 9, dihitung di dalam maxW
+    final w = (maxW - rpW).clamp(30.0, maxW);
     return Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.end, children: [
       const Text('Rp ', style: TextStyle(fontSize: 9)),
       SizedBox(width: w, child: DotMatrixText(text: teks, size: size)),
