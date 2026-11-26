@@ -232,39 +232,39 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
   Widget _tombolStripRapi(String label, Color bg, VoidCallback onTap) {
     final gelap = bg == Colors.black || bg == const Color(0xFF1F2A44) || bg == const Color(0xFF2D7DFF);
-    return SizedBox(height: 36, child: ElevatedButton(onPressed: onTap, style: ElevatedButton.styleFrom(backgroundColor: bg, foregroundColor: gelap ? Colors.white : Colors.black, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 14), minimumSize: const Size(0, 36), tapTargetSize: MaterialTapTargetSize.shrinkWrap, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))), child: FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.2, height: 1.0)))));
+    return SizedBox(height: 30, child: ElevatedButton(onPressed: onTap, style: ElevatedButton.styleFrom(backgroundColor: bg, foregroundColor: gelap ? Colors.white : Colors.black, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 10), minimumSize: const Size(0, 30), tapTargetSize: MaterialTapTargetSize.shrinkWrap, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))), child: FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.2, height: 1.0)))));
   }
   Widget _stripTengah() {
     if (!_stripTengahTerbuka) return const SizedBox.shrink();
     // STRIP ASAL: chip TAX+ sampai ADD2, 1 BARIS, geser kiri-kanan. Tanpa tulisan Mode / LS MODE. GT DIBUANG (tidak perlu, MR sudah cukup).
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       decoration: const BoxDecoration(color: Color(0xFFFAFAF5), border: Border(bottom: BorderSide(color: Color(0xFF2EBD5A), width: 3))),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Row(
           children: [
             _tombolStripRapi('TAX+', Colors.teal, () => pencet('TAX+')),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             _tombolStripRapi('TAX-', Colors.teal, () => pencet('TAX-')),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             _tombolStripRapi('SET TAX', const Color(0xFF1F2A44), () => pencet('SET TAX')),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             _tombolStripRapi('COST', const Color(0xFF2D7DFF), () => pencet('COST')),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             _tombolStripRapi('SELL', const Color(0xFF2D7DFF), () => pencet('SELL')),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             _tombolStripRapi('MARGIN', const Color(0xFF2D7DFF), () => pencet('MARGIN')),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             _tombolStripRapi('CSM CLR', Colors.grey.shade300, () => pencet('CSM CLR')),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             _tombolStripRapi('ROUND: $modeRound', Colors.amber.shade100, () => pencet('ROUND')),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             _tombolStripRapi(modeAdd2 ? 'ADD2: ON' : 'ADD2: OFF', Colors.amber.shade100, () => pencet('ADD2')),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             _tombolStripRapi('✕', Colors.grey.shade300, () => setState(() { _stripTengahTerbuka = false; })),
           ],
         ),
@@ -766,10 +766,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
       Row(children: [
         Expanded(child: TextField(controller: _lsCariC, readOnly: true, showCursor: true, onTap: () => _aktifkanField(_lsCariC, 1), decoration: dec('Cari kode / nama / kategori...'), onChanged: (v) => setState(() { queryLS = v; }))),
         const SizedBox(width: 8),
-        TextButton(onPressed: () { bukaFormTambahBarang(); }, child: const Text('+ Tambah Barang')),
+        SizedBox(height: 36, width: 36, child: FilledButton(onPressed: () { bukaFormTambahBarang(); }, style: FilledButton.styleFrom(padding: EdgeInsets.zero, shape: const CircleBorder()), child: const Text('+', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)))), // RAMPING: tombol + bulat, 1 baris dengan kolom cari (tulisan pindah ke dialog Tambah Barang)
       ]),
-      const SizedBox(height: 8),
-      if (filtered.isEmpty) const Center(child: Text('Belum ada barang. Tap + Tambah Barang.')),
+      const SizedBox(height: 6),
+      if (filtered.isEmpty) const Center(child: Text('Belum ada barang. Tap + untuk tambah.')),
       if (filtered.isNotEmpty) Expanded(child: ListView.builder(itemCount: filtered.length, itemBuilder: (_, i) {
         final b = filtered[i];
         final idxDaftar = daftarBarang.indexWhere((x) => x['kode'] == b['kode']);
@@ -778,15 +778,15 @@ class _S extends ConsumerState<HomeDaftarPO> {
         return InkWell(
           // Tap DI LUAR chip putih (area hijau kartu) = pilih barang DASAR: harga1 + satuan dasar.
           onTap: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': b['harga1'].toString(), 'satuan': (b['satuan'] ?? '').toString()}; _qtyMPlus = null; adaQtyHitung = false; _tombolKuningAktif = ''; _resetKeyboard(); }),
-          child: Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: BoxDecoration(color: aktif ? Colors.green.shade100 : Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
+          child: Container(margin: const EdgeInsets.only(bottom: 4), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(color: aktif ? Colors.green.shade100 : Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [CircleAvatar(radius: 16, child: Text(b['nama'].toString().isEmpty ? '?' : b['nama'].toString()[0].toLowerCase(), style: const TextStyle(fontSize: 14))), const SizedBox(width: 8), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${b['nama']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis), Text('${b['kode']} • ${b['kategori']} • ${b['satuan'] ?? 'sak'}', style: const TextStyle(fontSize: 11, color: Colors.grey))])), const SizedBox(width: 6),
+              Row(children: [CircleAvatar(radius: 14, child: Text(b['nama'].toString().isEmpty ? '?' : b['nama'].toString()[0].toLowerCase(), style: const TextStyle(fontSize: 12))), const SizedBox(width: 6), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${b['nama']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis), Text('${b['kode']} • ${b['kategori']} • ${b['satuan'] ?? 'sak'}', style: const TextStyle(fontSize: 10, color: Colors.grey))])), const SizedBox(width: 4),
               // Ikon EDIT: buka form Tambah Barang, isinya dari barang ini, simpan = update.
-              IconButton(icon: const Icon(Icons.edit, size: 20, color: Colors.teal), tooltip: 'Edit barang', padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32), onPressed: () => bukaFormTambahBarang(barangEdit: b)),
+              IconButton(icon: const Icon(Icons.edit, size: 18, color: Colors.teal), tooltip: 'Edit barang', padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28), onPressed: () => bukaFormTambahBarang(barangEdit: b)),
               // Ikon HAPUS: hapus barang dari LS. Kalau barang ini sedang dipilih, lepas pilihannya.
-              IconButton(icon: const Icon(Icons.delete, size: 20, color: Colors.red), tooltip: 'Hapus barang', padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32), onPressed: () { if (idxDaftar >= 0) { setState(() { daftarBarang.removeAt(idxDaftar); if (barangDipilih != null && barangDipilih!['kode'] == b['kode']) { barangDipilih = null; } }); } }),
+              IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), tooltip: 'Hapus barang', padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28), onPressed: () { if (idxDaftar >= 0) { setState(() { daftarBarang.removeAt(idxDaftar); if (barangDipilih != null && barangDipilih!['kode'] == b['kode']) { barangDipilih = null; } }); } }),
             ]),
-              if (satuanBarang.isNotEmpty) ...[const SizedBox(height: 6), Wrap(spacing: 4, runSpacing: 4, children: satuanBarang.map<Widget>((x) { final m = Map<String, dynamic>.from(x as Map); final nom = double.tryParse(m['nominal'].toString()) ?? 0; final labelSatuan = (m['satuanBaru']?.toString().isNotEmpty == true) ? m['satuanBaru'].toString() : m['satuan'].toString(); return ActionChip(label: Text('$labelSatuan - ${formatRupiah(nom.toInt())}', style: const TextStyle(fontSize: 10)), onPressed: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': nom.toInt().toString(), 'satuan': labelSatuan}; _qtyMPlus = null; adaQtyHitung = false; layar = nom.toStringAsFixed(0); entryBaru = true; _tombolKuningAktif = ''; _resetKeyboard(); })); /* tap chip PUTIH = pilih VARIAN yang ditap: nominal + satuan chip itu, harga chip tampil di layar */ }).toList())],
+              if (satuanBarang.isNotEmpty) ...[const SizedBox(height: 4), Wrap(spacing: 3, runSpacing: 3, children: satuanBarang.map<Widget>((x) { final m = Map<String, dynamic>.from(x as Map); final nom = double.tryParse(m['nominal'].toString()) ?? 0; final labelSatuan = (m['satuanBaru']?.toString().isNotEmpty == true) ? m['satuanBaru'].toString() : m['satuan'].toString(); return ActionChip(label: Text('$labelSatuan - ${formatRupiah(nom.toInt())}', style: const TextStyle(fontSize: 9)), onPressed: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': nom.toInt().toString(), 'satuan': labelSatuan}; _qtyMPlus = null; adaQtyHitung = false; layar = nom.toStringAsFixed(0); entryBaru = true; _tombolKuningAktif = ''; _resetKeyboard(); })); /* tap chip PUTIH = pilih VARIAN yang ditap: nominal + satuan chip itu, harga chip tampil di layar */ }).toList())],
             ])),
         );
       })),
@@ -1063,7 +1063,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   Widget _tombolKeyboard(String label, {int flex = 1, Color? bg, Color? fg, VoidCallback? onTap, VoidCallback? onLongPress}) {
     return Expanded(flex: flex, child: Padding(padding: const EdgeInsets.all(3),
       child: GestureDetector(onTap: onTap, onLongPress: onLongPress,
-        child: Container(height: 48, decoration: BoxDecoration(color: bg ?? Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26), boxShadow: const [BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 3), blurRadius: 0)]),
+        child: Container(height: 44, decoration: BoxDecoration(color: bg ?? Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26), boxShadow: const [BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 3), blurRadius: 0)]),
           child: Center(child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg ?? Colors.black)))))));
   }
   // Tombol BSKRO / garis / WCUN di keypad (ganti tombol CEK, tombol hitam).
@@ -1075,7 +1075,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     _onTapTombolKuning('CEK');
   }
   Widget _tombolBaskoroKeypad() {
-    return Expanded(child: Padding(padding: const EdgeInsets.all(4.0),
+    return Expanded(child: Padding(padding: const EdgeInsets.all(3.0),
       child: GestureDetector(onTap: _onTapBaskoroKeypad,
         child: Container(height: double.infinity, decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(14),
             border: Border.all(color: Colors.black26, width: 0.8),
@@ -1084,9 +1084,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
           child: ClipRRect(borderRadius: BorderRadius.circular(14),
             child: FittedBox(fit: BoxFit.scaleDown,
               child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Text('BSKRO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
-                Container(width: 30, height: 1.5, color: Colors.white, margin: const EdgeInsets.symmetric(vertical: 3)),
-                const Text('WCUN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
+                const Text('BSKRO', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
+                Container(width: 26, height: 1.5, color: Colors.white, margin: const EdgeInsets.symmetric(vertical: 2)),
+                const Text('WCUN', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white, height: 1.1, letterSpacing: 0.3)),
               ])))))));
   }
 
@@ -1095,7 +1095,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   Widget _tombolBaskoro(VoidCallback onTap) {
     return Expanded(child: Padding(padding: const EdgeInsets.all(3),
       child: GestureDetector(onTap: onTap,
-        child: Container(height: 48, decoration: BoxDecoration(color: Colors.blue.shade400, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26), boxShadow: const [BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 3), blurRadius: 0)]),
+        child: Container(height: 44, decoration: BoxDecoration(color: Colors.blue.shade400, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26), boxShadow: const [BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 3), blurRadius: 0)]),
           child: ClipRRect(borderRadius: BorderRadius.circular(12),
             child: FittedBox(fit: BoxFit.scaleDown,
               child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -1109,8 +1109,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   Widget _barisBaskoro() {
     return Padding(padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
       child: GestureDetector(onTap: () => setState(() { _modeKeyboard = 1; }),
-        child: Container(height: 44, decoration: BoxDecoration(color: Colors.blue.shade400, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26)),
-          child: const Center(child: FittedBox(fit: BoxFit.scaleDown, child: Text('BASKORO•WINGCHUN', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)))))));
+        child: Container(height: 36, decoration: BoxDecoration(color: Colors.blue.shade400, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.black26)),
+          child: const Center(child: FittedBox(fit: BoxFit.scaleDown, child: Text('BASKORO•WINGCHUN', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)))))));
   }
   Widget _barisQwerty(List<String> keys) {
     return Expanded(child: Row(children: [for (final k in keys) _tombolKeyboard(_huruf(k), onTap: () => _ketikKeyboard(_huruf(k)))]));
@@ -1181,8 +1181,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (_modeKeyboard == 2) { return _keyboardAngka(); }
     if (_modeKeyboard == 3) { return _keyboardSimbol(); }
     return Column(children: [
-      Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(10, 18, 10, 10), child: Column(children: [
-        Expanded(child: Row(children: [tombol('AC', bg: Colors.blue.shade400, fg: Colors.white), tombol('MRT', bg: Colors.grey.shade400), tombol('M-', bg: Colors.grey.shade400), tombol('M+', bg: Colors.green, fg: Colors.white, besar: true), tombol('LS', bg: Colors.orange.shade100, besar: true), _tombolBaskoroKeypad(), tombol('CPS', bg: Colors.amber, fg: Colors.black), tombol('BEP', bg: Colors.pink, fg: Colors.white)])),
+      Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(10, 10, 10, 8), child: Column(children: [
+        Expanded(child: Row(children: [tombol('AC', bg: Colors.blue.shade400, fg: Colors.white), tombol('MRT', bg: Colors.grey.shade400), tombol('M-', bg: Colors.grey.shade400), tombol('LS', bg: Colors.orange.shade100, besar: true), _tombolBaskoroKeypad(), tombol('CPS', bg: Colors.amber, fg: Colors.black), tombol('BEP', bg: Colors.pink, fg: Colors.white)])),
         Expanded(child: Row(children: [tombol('OFF', bg: Colors.blue.shade400, fg: Colors.white), tombol('7'), tombol('8'), tombol('9'), tombol('RIW', bg: Colors.grey.shade300), tombol('MU', bg: Colors.grey.shade300), tombol('MC', bg: Colors.grey.shade300)])),
         Expanded(child: Row(children: [tombol('%', bg: Colors.grey.shade300), tombol('4'), tombol('5'), tombol('6'), tombol('-', bg: Colors.grey.shade300), tombol('÷', bg: Colors.grey.shade300), tombol('MR', bg: Colors.grey.shade300)])),
         Expanded(child: Row(children: [tombol('+/-', bg: Colors.grey.shade300), tombol('1'), tombol('2'), tombol('3'), tombol('+', bg: Colors.grey.shade300), tombol('x', bg: Colors.grey.shade300), tombol('PO', bg: Colors.teal, fg: Colors.white)])),
@@ -1797,7 +1797,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   Widget tombol(String label, {Color? bg, Color? fg, bool besar = false}) {
     final isDown = tombolDitekan == label && tekanTombol;
     final baseColor = bg ?? Colors.white;
-    return Expanded(child: Padding(padding: const EdgeInsets.all(4.0),
+    return Expanded(child: Padding(padding: const EdgeInsets.all(3.0),
       child: GestureDetector(
         onTapDown: (_) => setState(() { tombolDitekan = label; tekanTombol = true; }),
         onTapUp: (_) { setState(() { tekanTombol = false; }); pencet(label); },
@@ -1808,39 +1808,39 @@ class _S extends ConsumerState<HomeDaftarPO> {
             border: Border.all(color: Colors.black26, width: 0.8),
             boxShadow: isDown ? [] : [const BoxShadow(color: Color(0xFFB8A888), offset: Offset(0, 4), blurRadius: 0), const BoxShadow(color: Colors.white70, offset: Offset(0, -1), blurRadius: 0)],
           ),
-          child: Center(child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: besar ? 17 : 15, fontWeight: FontWeight.w800, color: fg ?? Colors.black, letterSpacing: 0.3))),
+          child: Center(child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: besar ? 16 : 14, fontWeight: FontWeight.w800, color: fg ?? Colors.black, letterSpacing: 0.3))),
         ),
       ),
     ));
   }
   @override Widget build(BuildContext context) {
-    final headerKalkulator = Container(color: const Color(0xFF1A1A1A), padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+    final headerKalkulator = Container(color: const Color(0xFF1A1A1A), padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
       child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("BASKORO WINGCHUN", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)), GestureDetector(onTap: dialogBabe, child: const Text("BABE•INFO", style: TextStyle(color: Colors.white70, fontSize: 9, decoration: TextDecoration.underline)))]), // Header: BASKORO WINGCHUN + BABE•INFO TETAP, yang dihapus cuma kata "dialog kalkulasi" (yang dicoret merah). Tap BABE•INFO tetap buka dialog info.
-        const SizedBox(height: 6),
-        // Panel solar Casio + label DJ-120
-        Row(children: [Expanded(child: Container(height: 14, decoration: BoxDecoration(color: const Color(0xFF3A2A1A), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.black54)), child: Row(children: List.generate(5, (i) => Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2), color: const Color(0xFF5A3D22))))))), const SizedBox(width: 8), const Text("DJ-120  •  12 DIGIT", style: TextStyle(color: Colors.white54, fontSize: 8, fontWeight: FontWeight.bold))]),
-        const SizedBox(height: 6),
-        Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: BoxDecoration(color: const Color(0xFFDDE8D0), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.black26)),
+        const SizedBox(height: 4),
+        // Panel solar Casio saja (label DJ-120 dihapus biar ramping, bentuk kalkulatornya sudah jelas).
+        Container(height: 12, decoration: BoxDecoration(color: const Color(0xFF3A2A1A), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.black54)), child: Row(children: List.generate(5, (i) => Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2), color: const Color(0xFF5A3D22)))))),
+        const SizedBox(height: 4),
+        Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFDDE8D0), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.black26)),
           child: Column(children: [
             // LAYAR RAPI (yang dilingkari merah): 3 baris TERPISAH, masing-masing tinggi tetap + jarak,
             // supaya titik DotMatrix tidak meluber ke baris bawah. Baris 1 = ekspresi, baris 2 = hasil, baris 3 = barang + %.
-            SizedBox(height: 22, width: double.infinity, child: DotMatrixText(text: _layarAtasCasio().isEmpty ? ' ' : _layarAtasCasio(), size: DotMatrixSize.small, color: Colors.black54)),
-            const SizedBox(height: 3),
-            SizedBox(height: 32, child: Row(children: [Expanded(child: Text(teksAcuan(), style: const TextStyle(fontSize: 12, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: DotMatrixText(text: _layarBawahCasio(), size: DotMatrixSize.nota, color: adaError ? Colors.red : Colors.black)))])),
-            const SizedBox(height: 3),
-            SizedBox(height: 16, child: Row(children: [Expanded(child: Text(barangDipilih == null ? "Pilih barang via LS" : "${barangDipilih!["nama"]} • ${barangDipilih!["kategori"]}", style: const TextStyle(fontSize: 9, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Text(teksSaran(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: warnaSaran()))])),
+            SizedBox(height: 16, width: double.infinity, child: DotMatrixText(text: _layarAtasCasio().isEmpty ? ' ' : _layarAtasCasio(), size: DotMatrixSize.small, color: Colors.black54)),
+            const SizedBox(height: 2),
+            SizedBox(height: 26, child: Row(children: [Expanded(child: Text(teksAcuan(), style: const TextStyle(fontSize: 12, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: DotMatrixText(text: _layarBawahCasio(), size: DotMatrixSize.nota, color: adaError ? Colors.red : Colors.black)))])),
+            const SizedBox(height: 2),
+            SizedBox(height: 14, child: Row(children: [Expanded(child: Text(barangDipilih == null ? "Pilih barang via LS" : "${barangDipilih!["nama"]} • ${barangDipilih!["kategori"]}", style: const TextStyle(fontSize: 9, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Text(teksSaran(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: warnaSaran()))])),
           ]),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Row(children: [
-          Expanded(flex: 2, child: InkWell(onTap: () => setState(() { modeHitung = modeHitung == "PEMBULATAN" ? "ORIGINAL" : "PEMBULATAN"; }), child: Container(height: 32, padding: const EdgeInsets.symmetric(horizontal: 8), decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16)), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)), child: const Text("5/4", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold))), const SizedBox(width: 4), Expanded(child: Text(modeHitung, style: const TextStyle(color: Colors.white, fontSize: 9), overflow: TextOverflow.ellipsis))])))),
+          Expanded(flex: 2, child: InkWell(onTap: () => setState(() { modeHitung = modeHitung == "PEMBULATAN" ? "ORIGINAL" : "PEMBULATAN"; }), child: Container(height: 28, padding: const EdgeInsets.symmetric(horizontal: 8), decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16)), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)), child: const Text("5/4", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold))), const SizedBox(width: 4), Expanded(child: Text(modeHitung, style: const TextStyle(color: Colors.white, fontSize: 9), overflow: TextOverflow.ellipsis))])))),
           const SizedBox(width: 4),
-          Expanded(child: SizedBox(height: 32, child: SegmentedButton<int>(segments: const [ButtonSegment(value: 0, label: Text("0", style: TextStyle(fontSize: 9))), ButtonSegment(value: 2, label: Text("2", style: TextStyle(fontSize: 9))), ButtonSegment(value: 3, label: Text("3", style: TextStyle(fontSize: 9)))], selected: {desimal}, onSelectionChanged: (s) => setState(() { desimal = s.first; })))),
+          Expanded(child: SizedBox(height: 28, child: SegmentedButton<int>(segments: const [ButtonSegment(value: 0, label: Text("0", style: TextStyle(fontSize: 9))), ButtonSegment(value: 2, label: Text("2", style: TextStyle(fontSize: 9))), ButtonSegment(value: 3, label: Text("3", style: TextStyle(fontSize: 9)))], selected: {desimal}, onSelectionChanged: (s) => setState(() { desimal = s.first; })))),
           const SizedBox(width: 4),
-          Expanded(child: SizedBox(height: 32, child: FilledButton(onPressed: _kirimWA, style: FilledButton.styleFrom(padding: EdgeInsets.zero, textStyle: const TextStyle(fontSize: 10)), child: const Text("Kirim WA")))),
+          Expanded(child: SizedBox(height: 28, child: FilledButton(onPressed: _kirimWA, style: FilledButton.styleFrom(padding: EdgeInsets.zero, textStyle: const TextStyle(fontSize: 10)), child: const Text("Kirim WA")))),
           const SizedBox(width: 4),
-          Expanded(child: SizedBox(height: 32, child: OutlinedButton(onPressed: _tampilNota, style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, textStyle: const TextStyle(fontSize: 9), backgroundColor: Colors.white), child: const Text("Nota")))),
+          Expanded(child: SizedBox(height: 28, child: OutlinedButton(onPressed: _tampilNota, style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, textStyle: const TextStyle(fontSize: 9), backgroundColor: Colors.white), child: const Text("Nota")))),
         ]),
       ]),
     );
@@ -1855,4 +1855,4 @@ class _S extends ConsumerState<HomeDaftarPO> {
       ])),
     );
   }
-}
+} 
