@@ -219,6 +219,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   } // controller baris PO: "$i-nama", "$i-harga", "$i-satuan", "$i-qty", "$i-step"
   Map<String, TextEditingController> _stepCtrls = {}; // controller baris CEK/RIW: sama
   final Map<String, TextEditingController> _chainCtrls = {}; // controller angka Step rantai CEK: 'step-$i-chain-$j'
+  final Map<int, List<Map<String, dynamic>>> _poChain = {}; // rantai Step per baris PO ('po-$i-chain-$j'), supaya baris PO tampil SAMA PERSIS dengan baris CEK (hijau). Isi rantai PO tidak disimpan ke PoItem, hanya tampilan & hitung Jumlah di panel.
   Map<int, String> _tipeHargaPO = {}; // per baris PO: 'ACUAN' / 'SATUAN'
   Map<int, String> _tipeHargaStep = {}; // per baris step: 'ACUAN' / 'SATUAN'
   Set<int> _poTerpilih = {}; // baris PO yang dicek (checkbox)
@@ -386,7 +387,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
           IconButton(icon: const Icon(Icons.delete, size: 20, color: Colors.red), onPressed: onHapus),
           if (tombolExtra != null) tombolExtra,
         ]),
-        if (tampilChain) ...[
+        // SEMUA FORM (CEK / PO / RIW) pakai layout yang sama seperti lingkaran kuning:
+        // Harga x Angka Satuan x Qty [Step...] [+] [M+], bawahnya Unit/Satuan + Jumlah.
+        if (true) ...[
           const SizedBox(height: 8),
           // Rantai: Harga Acuan x Angka Unit [Ops Step]... [+] [M+]
           // AUTO-PECAH (logika): Harga Acuan -> Harga Satuan x Angka Satuan, pembagi dari _pecahOtomatis
@@ -431,7 +434,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                   SizedBox(width: 72, child: _fieldBorderAtas(label: 'Step', controller: chainCtrls[j], angka: true, tag: '$tag-$index-chain-$j')),
                   InkWell(onTap: () => onChainHapus?.call(j), child: const Icon(Icons.close, size: 18, color: Colors.red)),
                 ],
-                OutlinedButton(onPressed: onChainTambah, child: const Text('+')),
+                if (onChainTambah != null) OutlinedButton(onPressed: onChainTambah, child: const Text('+')),
                 if (onMPlus != null) ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: onMPlus, child: const Text('M+')),
               ]),
               const SizedBox(height: 3),
@@ -450,18 +453,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
             ]);
           }),
 
-        ] else ...[
-          const SizedBox(height: 8),
-          _fieldBorderAtas(label: 'Harga', controller: cHarga, angka: true, tag: '$tag-$index-harga'),
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(child: _fieldBorderAtas(label: 'Unit / Satuan', controller: cSatuan, tag: '$tag-$index-satuan')),
-            const SizedBox(width: 8),
-            Expanded(child: _fieldBorderAtas(label: 'Qty', controller: cQty, angka: true, tag: '$tag-$index-qty')),
-            const SizedBox(width: 8),
-            jumlahWidget,
-          ]),
-        ],
+        ], // else lama DIHAPUS: PO sekarang pakai layout kuning yang sama, tidak ada layout kedua
       ]),
     );
   }
@@ -788,7 +780,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
         final satuanBarang = (b['satuanList'] as List?) ?? [];
         return InkWell(
           // Tap DI LUAR chip putih (area hijau kartu) = pilih barang DASAR: harga1 + satuan dasar.
-          onTap: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': b['harga1'].toString(), 'satuan': (b['satuan'] ?? 'sak').toString()}; _qtyMPlus = null; adaQtyHitung = false; _tombolKuningAktif = ''; _resetKeyboard(); }),
+          onTap: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': b['harga1'].toString(), 'satuan': (b['satuan'] ?? '').toString()}; _qtyMPlus = null; adaQtyHitung = false; _tombolKuningAktif = ''; _resetKeyboard(); }),
           child: Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: BoxDecoration(color: aktif ? Colors.green.shade100 : Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [CircleAvatar(radius: 16, child: Text(b['nama'].toString().isEmpty ? '?' : b['nama'].toString()[0].toLowerCase(), style: const TextStyle(fontSize: 14))), const SizedBox(width: 8), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${b['nama']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis), Text('${b['kode']} • ${b['kategori']} • ${b['satuan'] ?? 'sak'}', style: const TextStyle(fontSize: 11, color: Colors.grey))])), const SizedBox(width: 6),
@@ -967,12 +959,22 @@ class _S extends ConsumerState<HomeDaftarPO> {
         ],
         const SizedBox(height: 4),
         Expanded(child: n == 0 ? const Center(child: Text('Belum ada item - pencet LS pilih barang, lalu ketik qty, lalu M+', textAlign: TextAlign.center)) : ListView.builder(itemCount: n, itemBuilder: (_, i) {
+          // BIRU = HIJAU: baris PO memanggil _barisItem dengan parameter rantai + M+ yang SAMA PERSIS dengan baris CEK.
+          final chainPo = _poChain.putIfAbsent(i, () => []);
+          for (var j = 0; j < chainPo.length; j++) { _chainCtrls.putIfAbsent('po-$i-chain-$j', () => TextEditingController(text: '${((chainPo[j] as Map)['angka'] as num?)?.toDouble() ?? 0}')); }
           return _barisItem(
             index: i, tag: 'po',
             cNama: _poCtrls['$i-nama']!, cHarga: _poCtrls['$i-harga']!, cSatuan: _poCtrls['$i-satuan']!, cQty: _poCtrls['$i-qty']!,
             dicek: _poTerpilih.contains(i),
             onCek: () => setState(() { if (_poTerpilih.contains(i)) { _poTerpilih.remove(i); } else { _poTerpilih.add(i); } }),
-            onHapus: () => setState(() { ref.read(poProvider.notifier).hapusItem(i); _poTerpilih = {}; }),
+            onHapus: () => setState(() { ref.read(poProvider.notifier).hapusItem(i); _poTerpilih = {}; _poChain.remove(i); }),
+            tampilChain: true,
+            chain: chainPo,
+            chainCtrls: List.generate(chainPo.length, (j) => _chainCtrls['po-$i-chain-$j']!),
+            onChainTambah: () { _commitSemuaBarisPO(); setState(() { _poChain.putIfAbsent(i, () => []).add({'ops': 'x', 'angka': 0.0}); }); },
+            onChainOps: (j) { setState(() { const opsList = ['x', '÷', '+', '-']; final cur = '${(_poChain[i]!)[j]['ops'] ?? 'x'}'; (_poChain[i]!)[j]['ops'] = opsList[(opsList.indexOf(cur) + 1) % opsList.length]; }); _commitSemuaBarisPO(); },
+            onChainHapus: (j) { _commitSemuaBarisPO(); setState(() { (_poChain[i]!).removeAt(j); for (var k = 0; k < (_poChain[i]!).length; k++) { _chainCtrls['po-$i-chain-$k']?.text = '${(((_poChain[i]!)[k] as Map)['angka'] as num?)?.toDouble() ?? 0}'; } _chainCtrls.removeWhere((key, _) => key.startsWith('po-$i-chain-') && (int.tryParse(key.split('-').last) ?? -1) >= (_poChain[i]!).length); }); },
+            onMPlus: () { _commitSemuaBarisPO(); setState(() {}); }, // M+ di baris PO = kunci/simpan baris ini ke PO (sama seperti M+ di CEK yang mengunci baris ke PO)
           );
         })),
         const SizedBox(height: 4),
@@ -1227,12 +1229,12 @@ class _S extends ConsumerState<HomeDaftarPO> {
   String queryLS = "";
   final kodeCtrl = TextEditingController();
   final namaCtrl = TextEditingController();
-  String kategoriPilih = "Semen";
+  String kategoriPilih = ""; // KOSONG: user pilih sendiri, bukan dummy "Semen"
   final List<String> listKategori = ["Semen", "Besi", "Cat", "Keramik", "Pipa"];
   final kategoriBaruCtrl = TextEditingController();
-  final unitCtrl = TextEditingController(text: "sak");
-  final harga1Ctrl = TextEditingController(text: "50000");
-  final List<TextEditingController> varianCtrls = [TextEditingController(text: "Hitam")];
+  final unitCtrl = TextEditingController(); // KOSONG: bukan dummy "sak"
+  final harga1Ctrl = TextEditingController(); // KOSONG: bukan dummy "50000"
+  final List<TextEditingController> varianCtrls = [TextEditingController()]; // KOSONG: bukan dummy "Hitam"
   final Set<String> daftarSatuan = {"sak", "kg", "kilo", "m", "3m", "pcs"};
   void tambahKeDaftarSatuan(String nama) {
     final v = nama.trim().toLowerCase();
@@ -1242,9 +1244,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
   InputDecoration dec(String hint, {String? prefix}) {
     return InputDecoration(hintText: hint, prefixText: prefix, isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11), border: const OutlineInputBorder());
   }
+  // KOSONG: 1 baris kosong, user isi sendiri. Bukan 2 baris dummy sak/50000/1000/pcs.
   List<SatuanItem> satuanList = [
-    SatuanItem(satuan: "sak", dasar: true, qty: "1", isi: "1", op: "x", nominal: "50000", satuanBaru: "sak"),
-    SatuanItem(satuan: "sak", dasar: false, qty: "1", isi: "50", op: "÷", nominal: "1000", satuanBaru: "pcs"),
+    SatuanItem(satuan: "", dasar: true, qty: "", isi: "", op: "x", nominal: "", satuanBaru: ""),
   ];
   String modeHitung = "PEMBULATAN";
   int desimal = 0;
@@ -1690,7 +1692,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       final kat = '${b["kategori"] ?? ''}';
       if (kat.isNotEmpty && !listKategori.contains(kat)) { listKategori.add(kat); }
       kategoriPilih = kat.isNotEmpty ? kat : listKategori.first;
-      unitCtrl.text = '${b["satuan"] ?? 'sak'}';
+      unitCtrl.text = '${b["satuan"] ?? ''}'; // KOSONG kalau barang lama tidak punya satuan, bukan dummy 'sak'
       harga1Ctrl.text = '${b["harga1"] ?? ''}';
       kategoriBaruCtrl.clear();
       final varianTeks = '${b["varian"] ?? ''}';
@@ -1701,21 +1703,21 @@ class _S extends ConsumerState<HomeDaftarPO> {
       if (sl.isNotEmpty) {
         satuanList = sl.map((x) {
           final m = Map<String, dynamic>.from(x as Map);
-          return SatuanItem(satuan: '${m["satuan"] ?? ''}', dasar: m["dasar"] == true, qty: '${m["qty"] ?? '1'}', isi: '${m["isi"] ?? '1'}', op: '${m["op"] ?? 'x'}', nominal: '${m["nominal"] ?? ''}', satuanBaru: '${m["satuanBaru"] ?? ''}');
+          return SatuanItem(satuan: '${m["satuan"] ?? ''}', dasar: m["dasar"] == true, qty: '${m["qty"] ?? ''}', isi: '${m["isi"] ?? ''}', op: '${m["op"] ?? 'x'}', nominal: '${m["nominal"] ?? ''}', satuanBaru: '${m["satuanBaru"] ?? ''}'); // qty/isi KOSONG kalau tidak ada, op 'x' = netral (x1)
         }).toList();
       } else {
-        satuanList = [SatuanItem(satuan: "sak", dasar: true, qty: "1", isi: "1", op: "x", nominal: "50000", satuanBaru: "sak"), SatuanItem(satuan: "sak", dasar: false, qty: "1", isi: "50", op: "÷", nominal: "1000", satuanBaru: "pcs")];
+        satuanList = [SatuanItem(satuan: "", dasar: true, qty: "", isi: "", op: "x", nominal: "", satuanBaru: "")]; // KOSONG, bukan dummy
       }
     } else {
       kodeCtrl.clear();
       namaCtrl.clear();
       kategoriPilih = listKategori.first;
-      unitCtrl.text = 'sak';
-      harga1Ctrl.text = '50000';
+      unitCtrl.clear(); // KOSONG, bukan dummy 'sak'
+      harga1Ctrl.clear(); // KOSONG, bukan dummy '50000'
       kategoriBaruCtrl.clear();
       varianCtrls.clear();
-      varianCtrls.add(TextEditingController(text: 'Hitam'));
-      satuanList = [SatuanItem(satuan: "sak", dasar: true, qty: "1", isi: "1", op: "x", nominal: "50000", satuanBaru: "sak"), SatuanItem(satuan: "sak", dasar: false, qty: "1", isi: "50", op: "÷", nominal: "1000", satuanBaru: "pcs")];
+      varianCtrls.add(TextEditingController()); // KOSONG, bukan dummy 'Hitam'
+      satuanList = [SatuanItem(satuan: "", dasar: true, qty: "", isi: "", op: "x", nominal: "", satuanBaru: "")]; // KOSONG, bukan dummy
     }
     showModalBottomSheet(context: context, isScrollControlled: true, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) {
@@ -1817,19 +1819,20 @@ class _S extends ConsumerState<HomeDaftarPO> {
   @override Widget build(BuildContext context) {
     final headerKalkulator = Container(color: const Color(0xFF1A1A1A), padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
       child: Column(children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("BASKORO WINGCHUN", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)), GestureDetector(onTap: dialogBabe, child: const Text("BABE•INFO - dialog kalkulasi", style: TextStyle(color: Colors.white70, fontSize: 9, decoration: TextDecoration.underline)))]),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("BASKORO WINGCHUN", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)), GestureDetector(onTap: dialogBabe, child: const Text("BABE•INFO", style: TextStyle(color: Colors.white70, fontSize: 9, decoration: TextDecoration.underline)))]), // Header: BASKORO WINGCHUN + BABE•INFO TETAP, yang dihapus cuma kata "dialog kalkulasi" (yang dicoret merah). Tap BABE•INFO tetap buka dialog info.
         const SizedBox(height: 6),
         // Panel solar Casio + label DJ-120
         Row(children: [Expanded(child: Container(height: 14, decoration: BoxDecoration(color: const Color(0xFF3A2A1A), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.black54)), child: Row(children: List.generate(5, (i) => Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2), color: const Color(0xFF5A3D22))))))), const SizedBox(width: 8), const Text("DJ-120  •  12 DIGIT", style: TextStyle(color: Colors.white54, fontSize: 8, fontWeight: FontWeight.bold))]),
         const SizedBox(height: 6),
         Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: BoxDecoration(color: const Color(0xFFDDE8D0), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.black26)),
           child: Column(children: [
-            // Baris 1 display Casio: ekspresi (misal "5 x 80`000") - kecil, kanan
-            SizedBox(width: double.infinity, child: DotMatrixText(text: _layarAtasCasio().isEmpty ? ' ' : _layarAtasCasio(), size: DotMatrixSize.small, color: Colors.black54)),
-            // Baris 2: Acuan (kiri, kecil) + Layar utama (kanan, besar)
-            Row(children: [Expanded(child: Text(teksAcuan(), style: const TextStyle(fontSize: 12, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: DotMatrixText(text: _layarBawahCasio(), size: DotMatrixSize.nota, color: adaError ? Colors.red : Colors.black)))]),
-            const SizedBox(height: 2),
-            Row(children: [Expanded(child: Text(barangDipilih == null ? "Pilih barang via LS" : "${barangDipilih!["nama"]} • ${barangDipilih!["kategori"]}", style: const TextStyle(fontSize: 9, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Text(teksSaran(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: warnaSaran()))]),
+            // LAYAR RAPI (yang dilingkari merah): 3 baris TERPISAH, masing-masing tinggi tetap + jarak,
+            // supaya titik DotMatrix tidak meluber ke baris bawah. Baris 1 = ekspresi, baris 2 = hasil, baris 3 = barang + %.
+            SizedBox(height: 22, width: double.infinity, child: DotMatrixText(text: _layarAtasCasio().isEmpty ? ' ' : _layarAtasCasio(), size: DotMatrixSize.small, color: Colors.black54)),
+            const SizedBox(height: 3),
+            SizedBox(height: 32, child: Row(children: [Expanded(child: Text(teksAcuan(), style: const TextStyle(fontSize: 12, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: DotMatrixText(text: _layarBawahCasio(), size: DotMatrixSize.nota, color: adaError ? Colors.red : Colors.black)))])),
+            const SizedBox(height: 3),
+            SizedBox(height: 16, child: Row(children: [Expanded(child: Text(barangDipilih == null ? "Pilih barang via LS" : "${barangDipilih!["nama"]} • ${barangDipilih!["kategori"]}", style: const TextStyle(fontSize: 9, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 8), Text(teksSaran(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: warnaSaran()))])),
           ]),
         ),
         const SizedBox(height: 8),
