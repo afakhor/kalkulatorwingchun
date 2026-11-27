@@ -25,33 +25,7 @@ jobs:
         with:
           flutter-version: '3.35.0'
           channel: 'stable'
-
-      - name: Fix truncated generics & imports in lib
-        run: |
-          python3 - <<'EOF'
-          import pathlib, re
-
-          patterns = [
-              (r'Future<List>>', 'Future<List>>'),
-              (r'Future>', 'Future>'),
-              (r'List<List>>', 'List<List>>'),
-              (r'\bList>\s+([A-Za-z_]\w*)', r'List> \1'),
-              (r'\bList>\s*([,\)])', r'List>\1'),
-              (r'=\s*>\s*\[\s*\]', '= >[]'),
-              (r'\?\?\s*>\s*\[\s*\]', '?? >[]'),
-              (r'^Import\s+([\'"])', r'import \1'),
-          ]
-
-          for path in pathlib.Path('lib').rglob('*.dart'):
-              text = path.read_text(encoding='utf-8')
-              new_text = text
-              for pat, rep in patterns:
-                  new_text = re.sub(pat, rep, new_text, flags=re.MULTILINE)
-              if new_text != text:
-                  path.write_text(new_text, encoding='utf-8')
-                  print(f'Fixed: {path}')
-          EOF
-
+     
       - run: flutter pub get
       - run: flutter pub run build_runner build --delete-conflicting-outputs
       - run: flutter analyze
