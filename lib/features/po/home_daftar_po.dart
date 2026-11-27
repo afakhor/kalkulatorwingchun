@@ -32,8 +32,8 @@ class SatuanItem {
 }
 
 class _AutoField extends StatefulWidget {
-  const _AutoField({required this.controller, this.hint = "", this.angka = false, this.onChanged, this.min = 44, this.max = 150});
-  final TextEditingController controller; final String hint; final bool angka; final ValueChanged<String>? onChanged; final double min; final double max;
+  const _AutoField({required this.controller, this.hint = "", this.angka = false, this.onChanged, this.onTap, this.min = 44, this.max = 150});
+  final TextEditingController controller; final String hint; final bool angka; final ValueChanged<String>? onChanged; final VoidCallback? onTap; final double min; final double max;
   @override State<_AutoField> createState() => _AutoFieldS();
 }
 class _AutoFieldS extends State<_AutoField> {
@@ -46,7 +46,7 @@ class _AutoFieldS extends State<_AutoField> {
     if ((nw - w).abs() > 1) setState(() => w = nw);
   }
   @override Widget build(BuildContext context) {
-    return SizedBox(width: w, child: TextField(controller: widget.controller, keyboardType: widget.angka ? TextInputType.number : TextInputType.text, textAlign: widget.angka ? TextAlign.center : TextAlign.left, style: const TextStyle(fontSize: 13), decoration: InputDecoration(hintText: widget.hint, isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11), border: const OutlineInputBorder()), onChanged: (v) { _ukur(); widget.onChanged?.call(v); }));
+    return SizedBox(width: w, child: TextField(controller: widget.controller, keyboardType: widget.angka ? TextInputType.number : TextInputType.text, textAlign: widget.angka ? TextAlign.center : TextAlign.left, style: const TextStyle(fontSize: 13), decoration: InputDecoration(hintText: widget.hint, isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11), border: const OutlineInputBorder()), onTap: widget.onTap, onChanged: (v) { _ukur(); widget.onChanged?.call(v); }));
   }
 }
 
@@ -524,6 +524,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   // Yang ditambah di sini: strip saran di atas keyboard QWERTY untuk baris CEK/RIW/PO (Nama + Satuan),
   // autocorrect saat pindah field, auto-isi harga+satuan saat nama ketik persis, saran CPS, saran form Tambah Barang.
   bool _sembunyiSaranField = false;
+  // Field satuan (biru/hijau) di dialog Tambah Barang yang terakhir ditap - chip saran hanya untuk field ini.
+  TextEditingController? _satuanCtrlDialog;
   // Cari barang yang namanya PERSIS sama (beda besar/kecil huruf boleh) - untuk autocorrect + auto-isi.
   Map<String, dynamic>? _barangDariNama(String ketik) {
     final q = ketik.trim().toLowerCase();
@@ -535,7 +537,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   List<Map<String, dynamic>> _saranNamaBarang(String q) {
     final query = q.trim().toLowerCase();
     if (query.isEmpty) return [];
-    final cocok = daftarBarang.where((b) => '${b['nama'] ?? ''}'.toLowerCase().contains(query)).toList();
+    final cocok = daftarBarang.where((b) => '${b['nama'] ?? ''}'.toLowerCase().contains(query) && '${b['nama'] ?? ''}'.toLowerCase() != query).toList();
     cocok.sort((a, b) => ('${b['nama'] ?? ''}'.toLowerCase().startsWith(query) ? 1 : 0) - ('${a['nama'] ?? ''}'.toLowerCase().startsWith(query) ? 1 : 0));
     return cocok.take(8).toList();
   }
@@ -543,7 +545,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   List<String> _saranSatuan(String q) {
     final query = q.trim().toLowerCase();
     if (query.isEmpty) return [];
-    final cocok = daftarSatuan.where((x) => x.toLowerCase().contains(query)).toList();
+    final cocok = daftarSatuan.where((x) => x.toLowerCase().contains(query) && x.toLowerCase() != query).toList();
     cocok.sort((a, b) => (b.toLowerCase().startsWith(query) ? 1 : 0) - (a.toLowerCase().startsWith(query) ? 1 : 0));
     return cocok.take(6).toList();
   }
@@ -553,7 +555,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (query.isEmpty) return [];
     final semua = <String>{};
     for (final b in daftarBarang) { for (final v in '${b['varian'] ?? ''}'.split(',')) { final t = v.trim(); if (t.isNotEmpty) { semua.add(t); } } }
-    final cocok = semua.where((x) => x.toLowerCase().contains(query)).toList();
+    final cocok = semua.where((x) => x.toLowerCase().contains(query) && x.toLowerCase() != query).toList();
     cocok.sort((a, b) => (b.toLowerCase().startsWith(query) ? 1 : 0) - (a.toLowerCase().startsWith(query) ? 1 : 0));
     return cocok.take(5).toList();
   }
@@ -986,7 +988,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
               // Ikon HAPUS: hapus barang dari LS. Kalau barang ini sedang dipilih, lepas pilihannya.
               IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), tooltip: 'Hapus barang', padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28), onPressed: () { if (idxDaftar >= 0) { setState(() { daftarBarang.removeAt(idxDaftar); if (barangDipilih != null && barangDipilih!['kode'] == b['kode']) { barangDipilih = null; } }); } }),
             ]),
-              if (satuanBarang.isNotEmpty) ...[const SizedBox(height: 4), Wrap(spacing: 3, runSpacing: 3, children: satuanBarang.map<Widget>((x) { final m = Map<String, dynamic>.from(x as Map); final nom = double.tryParse(m['nominal'].toString()) ?? 0; final labelSatuan = (m['satuanBaru']?.toString().isNotEmpty == true) ? m['satuanBaru'].toString() : m['satuan'].toString(); return ActionChip(label: Text('$labelSatuan - ${formatRupiah(nom.toInt())}', style: const TextStyle(fontSize: 9)), onPressed: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': nom.toInt().toString(), 'satuan': labelSatuan}; _qtyMPlus = null; adaQtyHitung = false; layar = nom.toStringAsFixed(0); entryBaru = true; _tombolKuningAktif = ''; _resetKeyboard(); })); /* tap chip PUTIH = pilih VARIAN yang ditap: nominal + satuan chip itu, harga chip tampil di layar */ }).toList())],
+              if (satuanBarang.isNotEmpty) ...[const SizedBox(height: 4), Wrap(spacing: 3, runSpacing: 3, children: satuanBarang.where((x) { final m = Map<String, dynamic>.from(x as Map); final label = (m['satuanBaru']?.toString().isNotEmpty == true) ? m['satuanBaru'].toString() : m['satuan'].toString(); return label.trim().isNotEmpty; }).map<Widget>((x) { final m = Map<String, dynamic>.from(x as Map); final nom = double.tryParse(m['nominal'].toString()) ?? 0; final labelSatuan = (m['satuanBaru']?.toString().isNotEmpty == true) ? m['satuanBaru'].toString() : m['satuan'].toString(); return ActionChip(label: Text('$labelSatuan - ${formatRupiah(nom.toInt())}', style: const TextStyle(fontSize: 9)), onPressed: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': nom.toInt().toString(), 'satuan': labelSatuan}; _qtyMPlus = null; adaQtyHitung = false; layar = nom.toStringAsFixed(0); entryBaru = true; _tombolKuningAktif = ''; _resetKeyboard(); })); /* tap chip PUTIH = pilih VARIAN yang ditap: nominal + satuan chip itu, harga chip tampil di layar */ }).toList())],
             ])),
         );
       })),
@@ -1460,7 +1462,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   List<SatuanItem> _satuanBaruKosong() => [SatuanItem(satuan: "", dasar: true, qty: "", isi: "", op: "x", nominal: "", satuanBaru: "")];
   // Satuan gabungan (semua varian) - untuk field lama harga1/satuanList yang dibaca LS & dialogBabe.
   List<Map<String, dynamic>> _satuanGabunganMap() => satuanPerVarian.expand((g) => g.map((x) => x.toMap())).toList();
-  final Set<String> daftarSatuan = {"sak", "kg", "kilo", "m", "3m", "pcs"};
+  final Set<String> daftarSatuan = {"sak", "kg", "kilo", "m", "pcs"}; // tanpa '3m' bawaan: kalau user butuh 3m, ketik sekali -> otomatis masuk daftar
   void tambahKeDaftarSatuan(String nama) {
     final v = nama.trim().toLowerCase();
     if (v.isEmpty) return;
@@ -1962,6 +1964,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       satuanPerVarian = [_satuanBaruKosong()]; // 1 varian = 1 harga = 1 tambah satuan (1 baris kosong)
       satuanList = [SatuanItem(satuan: "", dasar: true, qty: "", isi: "", op: "x", nominal: "", satuanBaru: "")]; // KOSONG, bukan dummy
     }
+    _satuanCtrlDialog = null; // dialog baru = belum ada field satuan yang ditap, tidak ada chip saran liar
     showModalBottomSheet(context: context, isScrollControlled: true, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) {
         return StatefulBuilder(builder: (ctx2, setSheet) {
@@ -2007,18 +2010,18 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           Row(children: [
                             _AutoField(controller: it.qtyCtrl, hint: "1", angka: true, min: 44, max: 90, onChanged: (v) => setSheet(() { it.nominalManual = false; refreshNominal(it, hargaTeks: hargaCtrls[gi].text); })),
                             const SizedBox(width: 4),
-                            _AutoField(controller: it.namaCtrl, hint: "satuan", min: 52, max: 140, onChanged: (v) { if (it.dasar) { unitCtrl.text = v; } setSheet(() => refreshNominal(it, hargaTeks: hargaCtrls[gi].text)); }),
+                            _AutoField(controller: it.namaCtrl, hint: "satuan", min: 52, max: 140, onTap: () => setSheet(() { _satuanCtrlDialog = it.namaCtrl; }), onChanged: (v) { if (it.dasar) { unitCtrl.text = v; } setSheet(() => refreshNominal(it, hargaTeks: hargaCtrls[gi].text)); }),
                             const SizedBox(width: 4),
                             SizedBox(width: 36, height: 36, child: InkWell(onTap: () => setSheet(() { it.op = it.op == "x" ? "÷" : "x"; it.nominalManual = false; refreshNominal(it, hargaTeks: hargaCtrls[gi].text); }), borderRadius: BorderRadius.circular(18), child: Container(decoration: BoxDecoration(color: it.op == "÷" ? Colors.teal.shade100 : Colors.orange.shade100, shape: BoxShape.circle, border: Border.all(color: Colors.grey.shade400)), child: Center(child: Text(it.op, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))))),
                             const SizedBox(width: 4),
                             _AutoField(controller: it.isiCtrl, hint: "isi", angka: true, min: 44, max: 90, onChanged: (v) => setSheet(() { it.nominalManual = false; refreshNominal(it, hargaTeks: hargaCtrls[gi].text); })),
                             const SizedBox(width: 4),
-                            _AutoField(controller: it.satuanBaruCtrl, hint: "unit", min: 52, max: 140, onChanged: (v) { tambahKeDaftarSatuan(v); setSheet(() => refreshNominal(it, hargaTeks: hargaCtrls[gi].text)); }),
+                            _AutoField(controller: it.satuanBaruCtrl, hint: "unit", min: 52, max: 140, onTap: () => setSheet(() { _satuanCtrlDialog = it.satuanBaruCtrl; }), onChanged: (v) { tambahKeDaftarSatuan(v); setSheet(() => refreshNominal(it, hargaTeks: hargaCtrls[gi].text)); }),
                             IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 30, minHeight: 30), tooltip: it.dasar ? "Dasar" : "Jadikan dasar", icon: Icon(it.dasar ? Icons.check_circle : Icons.radio_button_unchecked, color: it.dasar ? Colors.green : Colors.grey, size: 22), onPressed: () => setSheet(() { for (var x in grup) { x.dasar = false; } it.dasar = true; syncUnitDariDasar(grup: gi); refreshSemuaNominal(); })),
                             IconButton(icon: const Icon(Icons.close, color: Colors.red, size: 16), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 26, minHeight: 26), onPressed: () => setSheet(() { if (grup.length > 1) { grup.removeAt(e.key); } })),
                           ]),
-                          // SARAN SATUAN: dari satuan yang dikenal, sesuai field satuan (biru/hijau) yang sedang diisi. Tap = isi.
-                          _chipSaranForm(_saranSatuan(it.namaCtrl.text.isNotEmpty ? it.namaCtrl.text : it.satuanBaruCtrl.text), it.namaCtrl.text.isNotEmpty ? it.namaCtrl : it.satuanBaruCtrl, setSheet),
+                          // SARAN SATUAN: hanya untuk field satuan (biru/hijau) yang terakhir ditap di baris ini. Tap = isi.
+                          if ((_satuanCtrlDialog == it.namaCtrl || _satuanCtrlDialog == it.satuanBaruCtrl) && _satuanCtrlDialog != null) _chipSaranForm(_saranSatuan(_satuanCtrlDialog!.text), _satuanCtrlDialog!, setSheet),
                           const SizedBox(height: 6),
                           // Field Rp = NOMINAL (boleh edit). Edit ini TIDAK mengubah baris INFO di bawahnya.
                           TextField(controller: it.nominalCtrl, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 13), decoration: dec("nominal - harga jual per unit hijau (boleh edit)", prefix: "Rp "), onTap: () => it.nominalManual = true, onChanged: (v) { it.nominalManual = true; setSheet(() {}); }),
@@ -2034,10 +2037,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
               const SizedBox(height: 16),
               SizedBox(width: double.infinity, height: 48, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), onPressed: () { final varian = varianCtrls.map((c) => c.text).join(", "); for (var c in varianCtrls) { tambahKeDaftarSatuan(c.text); } for (var g in satuanPerVarian) { for (var x in g) { tambahKeDaftarSatuan(x.satuanBaruCtrl.text); } } setState(() {
                   // SIMPAN PER VARIAN: hargaList + satuanPerVarian (format baru) + harga1 + satuanList gabungan (format lama, dibaca LS).
+                  // Baris satuan yang biru + hijaunya sama-sama kosong DIBUANG (Varian 2 yang tidak diisi satuannya tidak jadi chip '- Rp 73' di LS).
                   final hargaListSimpan = hargaCtrls.map((c) => c.text.replaceAll(RegExp(r'[^0-9]'), '')).toList();
-                  final barangBaru = {"kode": kodeCtrl.text, "nama": namaCtrl.text, "kategori": kategoriPilih, "harga1": hargaListSimpan.isEmpty ? '' : hargaListSimpan.first, "hargaList": hargaListSimpan, "satuan": unitCtrl.text, "varian": varian, "satuanList": _satuanGabunganMap(), "satuanPerVarian": satuanPerVarian.map((g) => g.map((x) => x.toMap()).toList()).toList()};
+                  final satuanPerVarianSimpan = satuanPerVarian.map((g) => g.where((x) => x.namaCtrl.text.trim().isNotEmpty || x.satuanBaruCtrl.text.trim().isNotEmpty).toList()).toList();
+                  final gabunganSimpan = satuanPerVarianSimpan.expand((g) => g.map((x) => x.toMap())).toList();
+                  final barangBaru = {"kode": kodeCtrl.text, "nama": namaCtrl.text, "kategori": kategoriPilih, "harga1": hargaListSimpan.isEmpty ? '' : hargaListSimpan.first, "hargaList": hargaListSimpan, "satuan": unitCtrl.text, "varian": varian, "satuanList": gabunganSimpan, "satuanPerVarian": satuanPerVarianSimpan.map((g) => g.map((x) => x.toMap()).toList()).toList()};
                   harga1Ctrl.text = hargaCtrls.isEmpty ? '' : hargaCtrls.first.text; // cermin field lama
-                  satuanList = _satuanGabunganMap().map((m) => SatuanItem(satuan: '${m["satuan"] ?? ''}', dasar: m["dasar"] == true, qty: '${m["qty"] ?? ''}', isi: '${m["isi"] ?? ''}', op: '${m["op"] ?? 'x'}', nominal: '${m["nominal"] ?? ''}', satuanBaru: '${m["satuanBaru"] ?? ''}')).toList(); // cermin gabungan
+                  satuanList = gabunganSimpan.map((m) => SatuanItem(satuan: '${m["satuan"] ?? ''}', dasar: m["dasar"] == true, qty: '${m["qty"] ?? ''}', isi: '${m["isi"] ?? ''}', op: '${m["op"] ?? 'x'}', nominal: '${m["nominal"] ?? ''}', satuanBaru: '${m["satuanBaru"] ?? ''}')).toList(); // cermin gabungan
                   if (edit) {
                     // UPDATE: ganti barang lama (cari pakai kode lama, karena kode bisa diubah di form).
                     final idx = daftarBarang.indexWhere((x) => x["kode"] == kodeLama);
@@ -2053,7 +2059,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
             ])));
         });
       },
-    ).then((_) { _diFormTambahBarang = false; });
+    ).then((_) { _diFormTambahBarang = false; _satuanCtrlDialog = null; });
   }
   // ===== BENTUK FISIK CASIO DJ-120 =====
   // Body krem, display hijau LCD 2 baris, tombol 3D: atas datar, bawah bayangan.
