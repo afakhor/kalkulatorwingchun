@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
-import '../po/po_models.dart';
-import '../calculator/po_calculator.dart';
 import '../../core/formatter.dart';
+import '../calculator/po_calculator.dart';
+import '../po/po_models.dart';
 import 'nota_pdf.dart';
-
-// Preview Nota FAKTUR RAPI - FIX overflow screenshot 25 Nov:
-// - Semua dibungkus SingleChildScrollView + padding 12 (bukan 20), jadi tidak kepotong.
-// - Header dibungkus Flexible, BASKORO WINGCHUN (16) + FAKTUR (18) tidak tabrakan lagi.
-// - Tabel: total kolom dikecilkan, Nama Barang Flex, Harga/Subtotal pakai DotMatrix SMALL (bukan nota/large).
-// - _angkaNota: perChar kecil (10.5) + lebar di-clamp ke kolom, jadi angka tidak meluber keluar tabel.
-// - Kolom total kanan: 170 (bukan 240), font 11, field edit 110.
 
 class NotaPreview extends StatefulWidget {
   final PoOrder po;
   final String namaToko;
   final void Function(PoOrder updated)? onChanged;
-  const NotaPreview({super.key, required this.po, this.namaToko = 'BASKORO WINGCHUN', this.onChanged});
+  const NotaPreview({
+    super.key,
+    required this.po,
+    this.namaToko = 'BASKORO WINGCHUN',
+    this.onChanged,
+  });
+
   @override
   State<NotaPreview> createState() => _NotaPreviewState();
 }
@@ -30,53 +29,75 @@ class _NotaPreviewState extends State<NotaPreview> {
   @override
   void initState() {
     super.initState();
-    _dpCtrl = TextEditingController(text: '${widget.po.dp.toInt()}');
-    _ongkirCtrl = TextEditingController(text: '${widget.po.ongkir.toInt()}');
-    final sub = widget.po.items.fold<double>(0, (a, i) => a + i.qty * i.hargaSatuan);
+    _dpCtrl = TextEditingController(text: '${widget.po.dp}');
+    _ongkirCtrl = TextEditingController(text: '${widget.po.ongkir}');
+    final sub = widget.po.items
+        .fold<double>(0, (a, i) => a + i.qty * i.hargaSatuan);
     final persen = sub == 0 ? 0.0 : widget.po.diskonTotal / sub * 100;
-    _diskonPersenCtrl = TextEditingController(text: persen.toStringAsFixed(persen % 1 == 0 ? 0 : 1));
-    _sisaCtrl = TextEditingController(text: '${hitungPO(widget.po).sisaBayar.toInt()}');
+    _diskonPersenCtrl = TextEditingController(
+        text: persen.toStringAsFixed(persen % 1 == 0 ? 0 : 1));
+    _sisaCtrl = TextEditingController(text: '${hitungPO(widget.po).sisaBayar}');
   }
 
   @override
   void dispose() {
-    _dpCtrl.dispose(); _ongkirCtrl.dispose(); _diskonPersenCtrl.dispose(); _sisaCtrl.dispose();
+    _dpCtrl.dispose();
+    _ongkirCtrl.dispose();
+    _diskonPersenCtrl.dispose();
+    _sisaCtrl.dispose();
     super.dispose();
   }
 
   PoOrder get _poNow {
-    final sub = widget.po.items.fold<double>(0, (a, i) => a + i.qty * i.hargaSatuan);
-    final persen = double.tryParse(_diskonPersenCtrl.text.replaceAll(',', '.')) ?? 0;
+    final sub = widget.po.items
+        .fold<double>(0, (a, i) => a + i.qty * i.hargaSatuan);
+    final persen =
+        double.tryParse(_diskonPersenCtrl.text.replaceAll(',', '.')) ?? 0;
     final diskon = sub * persen / 100;
-    final ongkir = double.tryParse(_ongkirCtrl.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
-    final dp = double.tryParse(_dpCtrl.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
-    return PoOrder(id: widget.po.id, tanggal: widget.po.tanggal, customer: widget.po.customer, items: widget.po.items, catatan: widget.po.catatan, dp: dp.toInt(), diskonTotal: diskon.toInt(), ongkir: ongkir.toInt(), status: widget.po.status);
+    final ongkir = double.tryParse(
+            _ongkirCtrl.text.replaceAll(RegExp(r'[^0-9.]'), '')) ??
+        0;
+    final dp =
+        double.tryParse(_dpCtrl.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+    return PoOrder(
+      id: widget.po.id,
+      tanggal: widget.po.tanggal,
+      customer: widget.po.customer,
+      items: widget.po.items,
+      catatan: widget.po.catatan,
+      dp: dp.round(),
+      diskonTotal: diskon.round(),
+      ongkir: ongkir.round(),
+      status: widget.po.status,
+    );
   }
 
   void _apply() {
     final h = hitungPO(_poNow);
-    if (!_editSisa) { _sisaCtrl.text = '${h.sisaBayar.toInt()}'; }
+    if (!_editSisa) {
+      _sisaCtrl.text = '${h.sisaBayar}';
+    }
     widget.onChanged?.call(_poNow);
     setState(() {});
   }
 
-  // ANGKA NOTA KECIL: pakai DotMatrix SMALL, lebar menyesuaikan kolom (tidak meluber).
-  // ANGKA NOTA ADAPTIF: total lebar = 'Rp ' + titik, dan total itu yang dibatasi maxW (kolom).
-  // Dulu maxW dipakai untuk titik SAJA (Rp ikut nambah di luar) + perkiraan perChar 10.5 salah
-  // (aslinya 1 karakter small = 5 x (1.8 + 1.1) + 3 = 17.5) -> total meluber keluar kolom.
-  // Sekarang: lebar titik = maxW - lebar 'Rp ', DotMatrixText sendiri yang mengecilkan titiknya
-  // sampai muat (lihat formatter.dart). Tidak ada lagi angka yang keluar sel.
-  Widget _angkaNota(num v, {DotMatrixSize size = DotMatrixSize.small, double maxW = 78}) {
-    final teks = formatRupiah(v.toInt()).replaceAll('Rp ', '').trim();
-    const rpW = 16.0; // lebar 'Rp ' font 9, dihitung di dalam maxW
+  Widget _angkaNota(num v,
+      {DotMatrixSize size = DotMatrixSize.small, double maxW = 78}) {
+    final teks = formatRupiah(v.round()).replaceAll('Rp ', '').trim();
+    const rpW = 16.0;
     final w = (maxW - rpW).clamp(30.0, maxW);
-    return Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.end, children: [
-      const Text('Rp ', style: TextStyle(fontSize: 9)),
-      SizedBox(width: w, child: DotMatrixText(text: teks, size: size)),
-    ]);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        const Text('Rp ', style: TextStyle(fontSize: 9)),
+        SizedBox(width: w, child: DotMatrixText(text: teks, size: size)),
+      ],
+    );
   }
 
-  Widget _editRow(String label, TextEditingController ctrl, {String suffix = '', void Function()? onDone}) {
+  Widget _editRow(String label, TextEditingController ctrl,
+      {String suffix = '', void Function()? onDone}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -88,19 +109,40 @@ class _NotaPreviewState extends State<NotaPreview> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             textAlign: TextAlign.right,
             style: const TextStyle(fontSize: 11),
-            decoration: InputDecoration(suffixText: suffix, suffixStyle: const TextStyle(fontSize: 11), border: const OutlineInputBorder(), contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5), isDense: true),
-            onSubmitted: (_) { onDone?.call(); _apply(); },
-            onChanged: (_) { if (label != 'Sisa Bayar') _apply(); },
+            decoration: InputDecoration(
+              suffixText: suffix,
+              suffixStyle: const TextStyle(fontSize: 11),
+              border: const OutlineInputBorder(),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              isDense: true,
+            ),
+            onSubmitted: (_) {
+              onDone?.call();
+              _apply();
+            },
+            onChanged: (_) {
+              if (label != 'Sisa Bayar') _apply();
+            },
           ),
         ),
       ]),
     );
   }
 
-  Widget _sel(String t, {bool bold = false, bool kanan = false, double size = 10}) {
+  Widget _sel(String t,
+      {bool bold = false, bool kanan = false, double size = 10}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      child: Text(t, style: TextStyle(fontSize: size, fontWeight: bold ? FontWeight.bold : FontWeight.normal), textAlign: kanan ? TextAlign.right : TextAlign.left, maxLines: 3, overflow: TextOverflow.ellipsis),
+      child: Text(
+        t,
+        style: TextStyle(
+            fontSize: size,
+            fontWeight: bold ? FontWeight.bold : FontWeight.normal),
+        textAlign: kanan ? TextAlign.right : TextAlign.left,
+        maxLines: 3,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 
@@ -109,37 +151,80 @@ class _NotaPreviewState extends State<NotaPreview> {
     final po = _poNow;
     final h = hitungPO(po);
     final telp = po.customer.nomorWA.trim();
-    final subtotal = po.items.fold<double>(0, (a, i) => a + i.qty * i.hargaSatuan);
+    final subtotal =
+        po.items.fold<double>(0, (a, i) => a + i.qty * i.hargaSatuan);
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.all(12),
       child: SingleChildScrollView(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(widget.namaToko, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), maxLines: 2),
-              const SizedBox(height: 2),
-              const Text('BABE INFO', style: TextStyle(fontSize: 10)),
-            ])),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(widget.namaToko,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold),
+                      maxLines: 2),
+                  const SizedBox(height: 2),
+                  const Text('BABE INFO', style: TextStyle(fontSize: 10)),
+                ],
+              ),
+            ),
             const SizedBox(width: 8),
-            const Text('FAKTUR', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1)),
+            const Text(
+              'FAKTUR',
+              style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1),
+            ),
           ]),
           const SizedBox(height: 8),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Nama Pelanggan : ${po.customer.namaOrang}', style: const TextStyle(fontSize: 11)),
-            if (telp.isNotEmpty) Text('No. Telp : $telp', style: const TextStyle(fontSize: 11)),
-            Text('Tanggal : ${formatTanggal(po.tanggal)}', style: const TextStyle(fontSize: 11)),
-            Text('No. Faktur : ${po.id}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            Text('Nama Pelanggan : ${po.customer.namaOrang}',
+                style: const TextStyle(fontSize: 11)),
+            if (telp.isNotEmpty)
+              Text('No. Telp : $telp', style: const TextStyle(fontSize: 11)),
+            Text('Tanggal : ${formatTanggal(po.tanggal)}',
+                style: const TextStyle(fontSize: 11)),
+            Text('No. Faktur : ${po.id}',
+                style: const TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.bold)),
           ]),
           const SizedBox(height: 8),
           Table(
             border: TableBorder.all(color: Colors.black, width: 0.8),
-            // TOTAL KOLOM FIX = 26+36+40+72+78 = 252, sisanya untuk Nama Barang (Flex). Muat di layar HP.
-            columnWidths: const {0: FixedColumnWidth(26), 1: FlexColumnWidth(), 2: FixedColumnWidth(36), 3: FixedColumnWidth(40), 4: FixedColumnWidth(72), 5: FixedColumnWidth(78)},
+            columnWidths: const {
+              0: FixedColumnWidth(26),
+              1: FlexColumnWidth(),
+              2: FixedColumnWidth(34),
+              3: FixedColumnWidth(44),
+              4: FixedColumnWidth(68),
+              5: FixedColumnWidth(74),
+            },
             children: [
               TableRow(children: [
-                for (final t in ['No', 'Nama Barang', 'Qty', 'Satuan', 'Harga', 'Subtotal'])
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4), color: Colors.grey.shade200, child: Text(t, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold), textAlign: t == 'Nama Barang' ? TextAlign.left : TextAlign.center)),
+                for (final t in [
+                  'No',
+                  'Nama Barang',
+                  'Qty',
+                  'Satuan',
+                  'Harga',
+                  'Subtotal'
+                ])
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    color: Colors.grey.shade200,
+                    child: Text(
+                      t,
+                      style: const TextStyle(
+                          fontSize: 10, fontWeight: FontWeight.bold),
+                      textAlign: t == 'Nama Barang'
+                          ? TextAlign.left
+                          : TextAlign.center,
+                    ),
+                  ),
               ]),
               ...List.generate(po.items.length, (idx) {
                 final i = po.items[idx];
@@ -148,48 +233,91 @@ class _NotaPreviewState extends State<NotaPreview> {
                   _sel('${idx + 1}'),
                   _sel(i.namaBarang),
                   _sel(formatHasil(i.qty.toDouble()), kanan: true),
-                  _sel('', kanan: true),
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4), alignment: Alignment.centerRight, child: _angkaNota(i.hargaSatuan, maxW: 66)),
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4), alignment: Alignment.centerRight, child: _angkaNota(sub, maxW: 72)),
+                  _sel(i.satuan, kanan: false),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+                    alignment: Alignment.centerRight,
+                    child: _angkaNota(i.hargaSatuan, maxW: 62),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+                    alignment: Alignment.centerRight,
+                    child: _angkaNota(sub, maxW: 68),
+                  ),
                 ]);
               }),
             ],
           ),
           const SizedBox(height: 8),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Catatan :', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-              Text(po.catatan.isEmpty ? 'Terima kasih. Telah berkurang, semoga sehat selalu.' : po.catatan, style: const TextStyle(fontSize: 11)),
-              const SizedBox(height: 12),
-              const Text('Penerima / Pembeli', style: TextStyle(fontSize: 11)),
-            ])),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Catatan :',
+                      style:
+                          TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  Text(po.catatan.isEmpty ? '-' : po.catatan,
+                      style: const TextStyle(fontSize: 11)),
+                ],
+              ),
+            ),
             const SizedBox(width: 8),
             SizedBox(
-              width: 170,
+              width: 190,
               child: Column(children: [
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Total', style: TextStyle(fontSize: 11)), _angkaNota(subtotal, maxW: 100)]),
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Sub Total', style: TextStyle(fontSize: 11)),
+                      _angkaNota(subtotal, maxW: 96),
+                    ]),
                 _editRow('Diskon', _diskonPersenCtrl, suffix: '%'),
-                _editRow('Ongkos', _ongkirCtrl),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Grand Total', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)), _angkaNota(h.totalAkhir, maxW: 100)]),
+                _editRow('Biaya Kirim', _ongkirCtrl),
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Total',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.bold)),
+                      _angkaNota(h.totalAkhir,
+                          size: DotMatrixSize.nota, maxW: 96),
+                    ]),
                 _editRow('DP', _dpCtrl),
                 _editRow('Sisa Bayar', _sisaCtrl, onDone: () {
                   _editSisa = true;
-                  final grand = h.totalAkhir;
-                  final sisa = double.tryParse(_sisaCtrl.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? grand;
-                  _dpCtrl.text = '${(grand - sisa).toInt()}';
-                  _editSisa = false;
-                  _apply();
+                  final sisaKetik = double.tryParse(
+                          _sisaCtrl.text.replaceAll(RegExp(r'[^0-9.]'), '')) ??
+                      0;
+                  final dpBaru = (h.totalAkhir - sisaKetik).round();
+                  _dpCtrl.text = '$dpBaru';
                 }),
               ]),
             ),
           ]),
-          const SizedBox(height: 10),
-          const Center(child: Text('Terima kasih', style: TextStyle(fontSize: 11))),
-          const SizedBox(height: 10),
-          Row(children: [
-            Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup'))),
-            const SizedBox(width: 8),
-            Expanded(child: ElevatedButton(onPressed: () async { await shareNotaPdf(_poNow, namaToko: widget.namaToko); }, child: const Text('Share WA PDF'))),
+          const SizedBox(height: 12),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+            const Column(children: [
+              Text('Penerima,', style: TextStyle(fontSize: 11)),
+              SizedBox(height: 28),
+              Text('( ..................... )', style: TextStyle(fontSize: 11)),
+            ]),
+            Column(children: [
+              const Text('Hormat Kami,', style: TextStyle(fontSize: 11)),
+              const SizedBox(height: 28),
+              Text('( ${widget.namaToko} )',
+                  style: const TextStyle(fontSize: 11)),
+            ]),
+          ]),
+          const SizedBox(height: 12),
+          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.picture_as_pdf),
+              label: const Text('PDF / Share'),
+              onPressed: () => shareNotaPdf(po, namaToko: widget.namaToko),
+            ),
           ]),
         ]),
       ),
