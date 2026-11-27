@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/formatter.dart';
 import '../../core/po_database.dart';
 import '../../widgets/kartu_po.dart';
+import '../customer/customer_provider.dart';
+import '../customer/daftar_orang_page.dart';
 import '../nota/nota_pdf.dart';
 import '../nota/nota_preview.dart';
 import '../po/po_models.dart';
@@ -395,6 +397,23 @@ class _S extends ConsumerState<HomeDaftarPO> {
   Set<int> _stepTerpilih = {};
   String? _tagKeyboardAktif;
   bool _diFormTambahBarang = false;
+
+  Future<void> _bukaHalamanDaftarOrang() async {
+    final dipilih = await Navigator.of(context).push<Customer>(
+      MaterialPageRoute(
+        builder: (_) => const DaftarOrangPage(),
+      ),
+    );
+    if (dipilih != null && mounted) {
+      setState(() {
+        _pelangganC.text = dipilih.namaOrang;
+        if (dipilih.nomorWA.isNotEmpty) {
+          _nomorWAC.text = dipilih.nomorWA;
+        }
+        _sembunyiSaranPelanggan = true;
+      });
+    }
+  }
 
   void _geserStateBarisSetelahHapus(String tag, int deletedIndex) {
     for (final suffix in ['unit', 'satuanHarga']) {
@@ -1064,10 +1083,18 @@ class _S extends ConsumerState<HomeDaftarPO> {
 
   List> _daftarPelanggan() {
     final map = <String, String>{};
+    for (final c in ref.read(customerProvider)) {
+      final nm = c.namaOrang.trim();
+      if (nm.isEmpty) continue;
+      map[nm] = c.nomorWA.trim();
+    }
     for (final p in _poTersimpan) {
       final nm = '${p['pelanggan'] ?? ''}'.trim();
       if (nm.isEmpty || nm == 'Tanpa Nama') continue;
-      map[nm] = '${p['nomorWA'] ?? ''}'.trim();
+      final wa = '${p['nomorWA'] ?? ''}'.trim();
+      if (!map.containsKey(nm) || map[nm]!.isEmpty) {
+        map[nm] = wa;
+      }
     }
     final list =
         map.entries.map((e) => {'nama': e.key, 'wa': e.value}).toList();
@@ -1709,9 +1736,17 @@ class _S extends ConsumerState<HomeDaftarPO> {
         );
       } catch (_) {}
     }
-    try {
-      await _db.simpanPelanggan(pelanggan);
-    } catch (_) {}
+    if (pelanggan != 'Tanpa Nama') {
+      try {
+        await ref.read(customerProvider.notifier).tambah(
+              Customer(
+                id: nomorWA.isNotEmpty ? nomorWA : pelanggan,
+                namaOrang: pelanggan,
+                nomorWA: nomorWA,
+              ),
+            );
+      } catch (_) {}
+    }
     setState(() {
       if (_poRevisi) {
         final idx =
@@ -2646,6 +2681,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
 
   Widget _panelDaftarItemPO() {
+    ref.watch(customerProvider);
     final po = ref.watch(poProvider);
     final n = po.items.length;
     if (_poCtrls.length != n * 5) {
@@ -2693,6 +2729,15 @@ class _S extends ConsumerState<HomeDaftarPO> {
                 color: Color(0xFF0F5132)),
           ),
           const Spacer(),
+          TextButton.icon(
+            icon: const Icon(Icons.people_alt, size: 16),
+            label: const Text('Orang', style: TextStyle(fontSize: 11)),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              minimumSize: const Size(0, 28),
+            ),
+            onPressed: _bukaHalamanDaftarOrang,
+          ),
           IconButton(
             icon: const Icon(Icons.close),
             tooltip: 'Tutup PO, balik ke keypad',
