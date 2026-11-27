@@ -203,6 +203,17 @@ class _S extends ConsumerState<HomeDaftarPO> {
   int _poTerbukaIndex = -1;
   // AUTO-PECAH: pembagi per baris, key = 'cek-0' / 'riw-0' / 'po-0'
   final Map<String, TextEditingController> _pecahCtrls = {};
+  // OP PECAH per baris: 'step-0-op' / 'po-0-op' — op x/÷ antara Harga dan Angka Satuan di baris CEK/PO/RIW.
+  // ACUANNYA dari tombol op baris satuan Tambah Barang (LS, lingkaran biru), bukan logika baru. Default 'x'.
+  final Map<String, String> _opPecah = {};
+  // ACUAN dari LS per baris: {'hargaSatuan': Harga varian, 'angkaSatuan': isi, 'op': op} — dari baris satuan Tambah Barang yang dipilih di LS.
+  // Dipakai _barisItem sebagai Harga Satuan / Angka Satuan / op awal, BUKAN _pecahOtomatis.
+  final Map<String, Map<String, dynamic>> _acuanDariLS = {};
+  // Hitung Harga Acuan dari op — SAMA seperti hitungNominal di Tambah Barang: x -> kali, ÷ -> bagi (bagi 0 = tetap).
+  double _acuanDariOp(double hargaSatuan, double angkaSatuan, String op) {
+    if (op == '÷') { return angkaSatuan == 0 ? hargaSatuan : hargaSatuan / angkaSatuan; }
+    return hargaSatuan * angkaSatuan;
+  }
   // PATOKAN % : Harga Satuan awal per baris (dari logika _pecahOtomatis, bukan angka dummy). 0.0% = belum diedit dari patokan ini.
   // Disimpan sekali, TIDAK dihitung ulang dari Harga Acuan yang sudah berubah, biar % tidak balik ke 0% sendiri.
   final Map<String, double> _satuanBaseline = {};
@@ -396,8 +407,14 @@ class _S extends ConsumerState<HomeDaftarPO> {
           Builder(builder: (ctx) {
             final acuanNow = double.tryParse(cHarga.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
             final pecah2 = _pecahOtomatis(acuanNow);
-            final satuanDef = pecah2['dasar']!;
-            final bagiDef2 = pecah2['bagi']!;
+            // ACUAN dari Tambah Barang (LS) kalau baris ini dibuat dari barang LS: Harga Satuan = Harga varian, Angka Satuan = isi, op = op baris satuan.
+            // Kalau tidak ada (ketik manual / tempel CPS / baris lama), fallback _pecahOtomatis seperti dulu.
+            final acuanLS = _acuanDariLS['$tag-$index'];
+            final satuanDef = acuanLS != null ? (acuanLS['hargaSatuan'] as double) : pecah2['dasar']!;
+            final bagiDef2 = acuanLS != null ? (acuanLS['angkaSatuan'] as double) : pecah2['bagi']!;
+            final keyOp = '$tag-$index-op';
+            _opPecah.putIfAbsent(keyOp, () => acuanLS != null ? '${acuanLS['op'] ?? 'x'}' : 'x');
+            final opPecah = _opPecah[keyOp] ?? 'x';
             final keyUnit = '$tag-$index-unit';
             final keySatuan = '$tag-$index-satuanHarga';
             _pecahCtrls.putIfAbsent(keyUnit, () => TextEditingController(text: '${bagiDef2.toInt()}')); // LOGIKA, bukan dummy: bagi dari _pecahOtomatis (1 = tidak pecah)
@@ -411,7 +428,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
             final persenEdit = patokan == 0 ? 0.0 : (satuanNow - patokan) / patokan * 100;
             // NOTA / WA pakai harga UPDATE: Harga Acuan disamakan ke Satuan x Angka Satuan
             // tanpa nunggu tombol Terapkan, jadi Preview Nota & Share WA = harga update x Qty x Step bila ada
-            final acuanUpdate = satuanNow * unitNow;
+            // Hitung acuan pakai op dari Tambah Barang: x -> kali, ÷ -> bagi. SAMA seperti refreshNominal di Tambah Barang.
+            final acuanUpdate = _acuanDariOp(satuanNow, unitNow, opPecah);
             if (acuanUpdate > 0 && (acuanUpdate - acuanNow).abs() > 0.01) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (cHarga.text != '${acuanUpdate.toInt()}') { cHarga.text = '${acuanUpdate.toInt()}'; setState(() {}); }
@@ -422,7 +440,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
               // Baris 1: Harga (Satuan, bisa edit)  x / ÷  Angka Satuan  x  Qty  [ops Step...]  [+] [M+]
               Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
                 SizedBox(width: 104, child: _fieldBorderAtas(label: 'Harga', controller: _pecahCtrls[keySatuan]!, angka: true, tag: '$keySatuan-harga')),
-                const Text('x', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                // Tombol OP x/÷ — SAMA PERSIS dengan tombol op baris satuan Tambah Barang (lingkaran biru): tap = ganti x <-> ÷.
+                SizedBox(width: 36, height: 36, child: InkWell(onTap: () => setState(() { _opPecah[keyOp] = opPecah == 'x' ? '÷' : 'x'; }), borderRadius: BorderRadius.circular(18), child: Container(decoration: BoxDecoration(color: opPecah == '÷' ? Colors.teal.shade100 : Colors.orange.shade100, shape: BoxShape.circle, border: Border.all(color: Colors.grey.shade400)), child: Center(child: Text(opPecah, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))))),
                 SizedBox(width: 56, child: _fieldBorderAtas(label: 'Angka Satuan', controller: _pecahCtrls[keyUnit]!, angka: true, tag: '$keyUnit-unit')),
                 const Text('x', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 SizedBox(width: 64, child: _fieldBorderAtas(label: 'Qty', controller: cQty, angka: true, tag: '$tag-$index-qty')),
@@ -437,8 +456,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
               const SizedBox(height: 3),
               // Garis bawah border: % perubahan Harga Satuan + Terapkan (logika lama, tidak diubah)
               Row(children: [
-                Expanded(child: Text('${persenEdit.toStringAsFixed(1)}% dari ${formatRupiah(patokan.toInt())}  •  Harga ${formatRupiah(satuanNow.toInt())} x ${unitNow.toStringAsFixed(unitNow % 1 == 0 ? 0 : 1)} = Harga Acuan ${formatRupiah((satuanNow * unitNow).toInt())}', style: const TextStyle(fontSize: 11, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                TextButton(onPressed: () { cHarga.text = '${(satuanNow * unitNow).toInt()}'; setState(() {}); }, child: const Text('Terapkan', style: TextStyle(fontSize: 11))),
+                Expanded(child: Text('${persenEdit.toStringAsFixed(1)}% dari ${formatRupiah(patokan.toInt())}  •  Harga ${formatRupiah(satuanNow.toInt())} $opPecah ${unitNow.toStringAsFixed(unitNow % 1 == 0 ? 0 : 1)} = Harga Acuan ${formatRupiah(acuanUpdate.toInt())}', style: const TextStyle(fontSize: 11, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                TextButton(onPressed: () { cHarga.text = '${acuanUpdate.toInt()}'; setState(() {}); }, child: const Text('Terapkan', style: TextStyle(fontSize: 11))),
               ]),
               const SizedBox(height: 4),
               // Baris Jumlah TARUH DI BAWAH (tadinya tidak cukup di samping) - UI saja, nilai dari _hitungChain yang sama
@@ -687,6 +706,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       _stepCtrls['$i-qty'] = TextEditingController(text: '${((st['qty'] as num?)?.toDouble() ?? 0)}');
       _stepCtrls['$i-step'] = TextEditingController(text: '${st['rumus'] ?? st['item'] ?? ''}');
       _tipeHargaStep[i] = '${st['tipeHarga'] ?? 'SATUAN'}';
+      if (st['opPecah'] != null) { _opPecah['step-$i-op'] = '${st['opPecah']}'; }
     }
   }
   void _commitBaris(String tag) {
@@ -718,7 +738,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     for (final pr in chainBaru) { rumus += " ${pr['ops']} ${formatHasil((pr['angka'] as num?)?.toDouble() ?? 0)}"; }
     rumus += ' = ${formatRupiah(jumlah.toInt())}';
     setState(() {
-      steps[i] = {'item': '$nama : $rumus', 'rumus': rumus, 'harga': harga, 'qty': qty, 'jumlah': jumlah, 'satuan': satuan, 'tipeHarga': tipe, 'chain': chainBaru};
+      steps[i] = {'item': '$nama : $rumus', 'rumus': rumus, 'harga': harga, 'qty': qty, 'jumlah': jumlah, 'satuan': satuan, 'tipeHarga': tipe, 'chain': chainBaru, 'opPecah': _opPecah['step-$i-op'] ?? 'x'};
     });
   }
   void _commitSemuaBarisStep() { for (var i = 0; i < steps.length; i++) { _commitBarisStep(i); } }
@@ -738,7 +758,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
       if (pecahSatuanC != null && pecahUnitC != null) {
         final ps = double.tryParse(pecahSatuanC.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
         final pu = double.tryParse(pecahUnitC.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
-        if (ps > 0 && pu > 0) { harga = ps * pu; }
+        // Harga pakai op dari Tambah Barang (LS): x -> kali, ÷ -> bagi. SAMA seperti refreshNominal di Tambah Barang.
+        if (ps > 0 && pu > 0) { harga = _acuanDariOp(ps, pu, _opPecah['po-$i-op'] ?? 'x'); }
       }
       final satuan = _poCtrls['$i-satuan']?.text.trim() ?? '';
       final qty = double.tryParse((_poCtrls['$i-qty']?.text ?? '').replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
@@ -792,6 +813,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       _pecahCtrls['po-$idxBaru-satuanHarga'] = TextEditingController(text: teksAngka(pecahSatuanCek));
       _pecahCtrls['po-$idxBaru-unit'] = TextEditingController(text: teksAngka(pecahUnitCek));
       _satuanBaseline['po-$idxBaru-satuanHarga'] = pecahSatuanCek; // patokan % ikut CEK, bukan pecah ulang
+      _opPecah['po-$idxBaru-op'] = _opPecah['step-$index-op'] ?? 'x'; // op ikut CEK, bukan pecah ulang
     }
     // Rebuild controller PO biar langsung kelihatan
     _poCtrls = {};
@@ -971,12 +993,15 @@ class _S extends ConsumerState<HomeDaftarPO> {
       for (var gi = 0; gi < perVarian.length; gi++) {
         final grup = (perVarian[gi] as List?) ?? [];
         final nama = gi < namaVarian.length ? namaVarian[gi] : '';
+        // Harga varian grup ini (acuan Harga Satuan di CEK/PO): dari hargaList, fallback harga1 untuk varian 1.
+        final hargaListB = (b['hargaList'] as List?) ?? [];
+        final hargaVarianGi = gi < hargaListB.length ? (double.tryParse('${hargaListB[gi]}') ?? 0) : (gi == 0 ? (double.tryParse('${b['harga1'] ?? ''}') ?? 0) : 0);
         var pertama = true;
         for (final x in grup) {
           final m = Map<String, dynamic>.from(x as Map);
           final label = labelDari(m);
           if (label.trim().isEmpty) { continue; }
-          hasil.add({'varian': nama, 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0});
+          hasil.add({'varian': nama, 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0, 'op': '${m['op'] ?? 'x'}', 'isi': double.tryParse('${m['isi'] ?? ''}') ?? 0, 'hargaVarian': hargaVarianGi});
           pertama = false;
         }
       }
@@ -987,11 +1012,27 @@ class _S extends ConsumerState<HomeDaftarPO> {
         final m = Map<String, dynamic>.from(x as Map);
         final label = labelDari(m);
         if (label.trim().isEmpty) { continue; }
-        hasil.add({'varian': namaVarian.isNotEmpty ? namaVarian.first : '', 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0});
+        hasil.add({'varian': namaVarian.isNotEmpty ? namaVarian.first : '', 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0, 'op': '${m['op'] ?? 'x'}', 'isi': double.tryParse('${m['isi'] ?? ''}') ?? 0, 'hargaVarian': double.tryParse('${b['harga1'] ?? ''}') ?? 0});
         pertama = false;
       }
     }
     return hasil;
+  }
+
+  // Baris satuan DASAR barang LS (dipakai tap kartu): dari grup varian 1, baris dasar (atau baris pertama).
+  // Kembalikan {op, isi, hargaVarian} — acuan op + isi untuk baris CEK/PO.
+  Map<String, dynamic> _barisDasarLS(Map<String, dynamic> b) {
+    final perVarian = (b['satuanPerVarian'] as List?) ?? [];
+    Map<String, dynamic>? row;
+    if (perVarian.isNotEmpty) {
+      final grup = (perVarian[0] as List?) ?? [];
+      for (final x in grup) { final m = Map<String, dynamic>.from(x as Map); if (m['dasar'] == true) { row = m; break; } }
+      row ??= grup.isNotEmpty ? Map<String, dynamic>.from(grup.first as Map) : null;
+    }
+    row ??= ((b['satuanList'] as List?) ?? []).isNotEmpty ? Map<String, dynamic>.from(((b['satuanList'] as List).first as Map)) : null;
+    final hargaVarian = double.tryParse('${b['harga1'] ?? ''}') ?? 0;
+    if (row == null) { return {'op': 'x', 'isi': 0.0, 'hargaVarian': hargaVarian}; }
+    return {'op': '${row['op'] ?? 'x'}', 'isi': double.tryParse('${row['isi'] ?? ''}') ?? 0, 'hargaVarian': hargaVarian};
   }
 
   Widget _panelLS() {
@@ -1013,11 +1054,12 @@ class _S extends ConsumerState<HomeDaftarPO> {
         final idxDaftar = daftarBarang.indexWhere((x) => x['kode'] == b['kode']);
         final aktif = barangDipilih != null && barangDipilih!['kode'] == b['kode'];
         final entriVarian = _entriVarianLS(b);
+        final dasarLS = _barisDasarLS(b);
         final kodeB = b['kode'].toString();
         final expanded = _lsExpand.contains(kodeB);
         return InkWell(
           // Tap DI LUAR chip putih (area hijau kartu) = pilih barang DASAR: harga1 + satuan dasar.
-          onTap: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': b['harga1'].toString(), 'satuan': (b['satuan'] ?? '').toString()}; _qtyMPlus = null; adaQtyHitung = false; _tombolKuningAktif = ''; _resetKeyboard(); }),
+          onTap: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': b['harga1'].toString(), 'satuan': (b['satuan'] ?? '').toString(), 'opPecah': '${dasarLS['op'] ?? 'x'}', 'isiSatuan': dasarLS['isi'], 'hargaVarian': dasarLS['hargaVarian']}; _qtyMPlus = null; adaQtyHitung = false; _tombolKuningAktif = ''; _resetKeyboard(); }),
           child: Container(margin: const EdgeInsets.only(bottom: 4), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(color: aktif ? Colors.green.shade100 : Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               // SATU BARIS: avatar + {nama barang} + Kategori + edit + hapus (tidak ada baris subtitle lagi).
@@ -1037,7 +1079,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                     if (entriVarian.isEmpty) Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), child: Text('Belum ada varian', style: TextStyle(fontSize: 11, color: Colors.grey.shade600))),
                     for (var ei = 0; ei < entriVarian.length; ei++) ...[
                       if (ei > 0) Container(height: 1, color: Colors.grey.shade200),
-                      InkWell(onTap: () => setState(() { final nom = (entriVarian[ei]['nominal'] as double).toInt(); barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': nom.toString(), 'satuan': '${entriVarian[ei]['satuan']}'}; _qtyMPlus = null; adaQtyHitung = false; layar = nom.toStringAsFixed(0); entryBaru = true; _tombolKuningAktif = ''; _resetKeyboard(); }),
+                      InkWell(onTap: () => setState(() { final nom = (entriVarian[ei]['nominal'] as double).toInt(); barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': nom.toString(), 'satuan': '${entriVarian[ei]['satuan']}', 'opPecah': '${entriVarian[ei]['op'] ?? 'x'}', 'isiSatuan': entriVarian[ei]['isi'], 'hargaVarian': entriVarian[ei]['hargaVarian']}; _qtyMPlus = null; adaQtyHitung = false; layar = nom.toStringAsFixed(0); entryBaru = true; _tombolKuningAktif = ''; _resetKeyboard(); }),
                         child: Container(color: (barangDipilih != null && barangDipilih!['kode'] == b['kode'].toString() && barangDipilih!['satuan'] == '${entriVarian[ei]['satuan']}' && barangDipilih!['harga1'] == (entriVarian[ei]['nominal'] as double).toInt().toString()) ? Colors.green.shade100 : Colors.transparent, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), child: Text('${entriVarian[ei]['varian']}'.trim().isNotEmpty ? '${entriVarian[ei]['varian']} => ${entriVarian[ei]['satuan']} ✓ ${formatRupiah((entriVarian[ei]['nominal'] as double).toInt())}' : '${entriVarian[ei]['satuan']} ✓ ${formatRupiah((entriVarian[ei]['nominal'] as double).toInt())}', style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis))),
                     ],
                     if (entriVarian.isNotEmpty) Container(height: 1, color: Colors.grey.shade200),
@@ -1858,9 +1900,22 @@ class _S extends ConsumerState<HomeDaftarPO> {
         if (barangDipilih != null) {
           final harga = int.tryParse("${barangDipilih!["harga1"]}") ?? 0;
           final jumlah = qtyAman * harga; // SUBTOTAL PER ITEM = qty x harga satuan. Bukan qty = subtotal.
+          // ACUAN dari Tambah Barang (LS): op + isi + Harga varian baris satuan yang dipilih di LS.
+          // Disimpan per baris baru, dipakai _barisItem sebagai Harga Satuan / Angka Satuan / op — BUKAN _pecahOtomatis.
+          final opLS = '${barangDipilih!["opPecah"] ?? 'x'}';
+          final isiLS = (barangDipilih!["isiSatuan"] as num?)?.toDouble() ?? 0;
+          final hargaVarianLS = (barangDipilih!["hargaVarian"] as num?)?.toDouble() ?? 0;
+          final idxPoBaru = ref.read(poProvider).items.length;
           final it = parseInputCepat("$qtyAman x ${barangDipilih!["nama"]} $harga");
           if (it != null) { ref.read(poProvider.notifier).tambahItem(it); }
-          steps.add({"item": "${barangDipilih!["nama"]} : $qtyAman x ${formatRupiah(harga)} = ${formatRupiah(jumlah)}", "rumus": "${barangDipilih!["nama"]} : $qtyAman x ${formatRupiah(harga)} = ${formatRupiah(jumlah)}", "harga": harga, "qty": qtyAman, "jumlah": jumlah, "chain": <Map<String, dynamic>>[]});
+          final idxStepBaru = steps.length;
+          steps.add({"item": "${barangDipilih!["nama"]} : $qtyAman x ${formatRupiah(harga)} = ${formatRupiah(jumlah)}", "rumus": "${barangDipilih!["nama"]} : $qtyAman x ${formatRupiah(harga)} = ${formatRupiah(jumlah)}", "harga": harga, "qty": qtyAman, "jumlah": jumlah, "chain": <Map<String, dynamic>>[], "opPecah": opLS});
+          if (hargaVarianLS > 0 && isiLS > 0) {
+            _acuanDariLS['step-$idxStepBaru'] = {'hargaSatuan': hargaVarianLS, 'angkaSatuan': isiLS, 'op': opLS};
+            _acuanDariLS['po-$idxPoBaru'] = {'hargaSatuan': hargaVarianLS, 'angkaSatuan': isiLS, 'op': opLS};
+            _opPecah['step-$idxStepBaru-op'] = opLS;
+            _opPecah['po-$idxPoBaru-op'] = opLS;
+          }
         }
         _habisMPlus = true; // habis M+ -> = berikutnya = tutup PO
         // M+ JANGAN BUKA APAPUN: input baris, tap M+ = tambah 1 baris, tetap di kalkulator.
