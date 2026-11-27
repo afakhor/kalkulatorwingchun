@@ -1902,7 +1902,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           final jumlah = qtyAman * harga; // SUBTOTAL PER ITEM = qty x harga satuan. Bukan qty = subtotal.
           // ACUAN dari Tambah Barang (LS): op + isi + Harga varian baris satuan yang dipilih di LS.
           // Disimpan per baris baru, dipakai _barisItem sebagai Harga Satuan / Angka Satuan / op — BUKAN _pecahOtomatis.
-          final opLS = '${barangDipilih!["opPecah"] ?? 'x'}';
+          final opLS = barangDipilih!["opPecah"]?.toString() ?? 'x';
           final isiLS = (barangDipilih!["isiSatuan"] as num?)?.toDouble() ?? 0;
           final hargaVarianLS = (barangDipilih!["hargaVarian"] as num?)?.toDouble() ?? 0;
           final idxPoBaru = ref.read(poProvider).items.length;
