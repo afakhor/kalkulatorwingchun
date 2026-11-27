@@ -413,7 +413,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
             final satuanDef = acuanLS != null ? (acuanLS['hargaSatuan'] as double) : pecah2['dasar']!;
             final bagiDef2 = acuanLS != null ? (acuanLS['angkaSatuan'] as double) : pecah2['bagi']!;
             final keyOp = '$tag-$index-op';
-            _opPecah.putIfAbsent(keyOp, () => acuanLS != null ? '${acuanLS['op'] ?? 'x'}' : 'x');
+            _opPecah.putIfAbsent(keyOp, () => acuanLS != null ? (acuanLS['op']?.toString() ?? 'x') : 'x');
             final opPecah = _opPecah[keyOp] ?? 'x';
             final keyUnit = '$tag-$index-unit';
             final keySatuan = '$tag-$index-satuanHarga';
@@ -706,7 +706,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       _stepCtrls['$i-qty'] = TextEditingController(text: '${((st['qty'] as num?)?.toDouble() ?? 0)}');
       _stepCtrls['$i-step'] = TextEditingController(text: '${st['rumus'] ?? st['item'] ?? ''}');
       _tipeHargaStep[i] = '${st['tipeHarga'] ?? 'SATUAN'}';
-      if (st['opPecah'] != null) { _opPecah['step-$i-op'] = '${st['opPecah']}'; }
+      if (st['opPecah'] != null) { _opPecah['step-$i-op'] = st['opPecah'].toString(); }
     }
   }
   void _commitBaris(String tag) {
@@ -1001,7 +1001,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           final m = Map<String, dynamic>.from(x as Map);
           final label = labelDari(m);
           if (label.trim().isEmpty) { continue; }
-          hasil.add({'varian': nama, 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0, 'op': '${m['op'] ?? 'x'}', 'isi': double.tryParse('${m['isi'] ?? ''}') ?? 0, 'hargaVarian': hargaVarianGi});
+          hasil.add({'varian': nama, 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0, 'op': m['op']?.toString() ?? 'x', 'isi': double.tryParse('${m['isi'] ?? ''}') ?? 0, 'hargaVarian': hargaVarianGi});
           pertama = false;
         }
       }
@@ -1012,7 +1012,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
         final m = Map<String, dynamic>.from(x as Map);
         final label = labelDari(m);
         if (label.trim().isEmpty) { continue; }
-        hasil.add({'varian': namaVarian.isNotEmpty ? namaVarian.first : '', 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0, 'op': '${m['op'] ?? 'x'}', 'isi': double.tryParse('${m['isi'] ?? ''}') ?? 0, 'hargaVarian': double.tryParse('${b['harga1'] ?? ''}') ?? 0});
+        hasil.add({'varian': namaVarian.isNotEmpty ? namaVarian.first : '', 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0, 'op': m['op']?.toString() ?? 'x', 'isi': double.tryParse('${m['isi'] ?? ''}') ?? 0, 'hargaVarian': double.tryParse('${b['harga1'] ?? ''}') ?? 0});
         pertama = false;
       }
     }
@@ -1032,7 +1032,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     row ??= ((b['satuanList'] as List?) ?? []).isNotEmpty ? Map<String, dynamic>.from(((b['satuanList'] as List).first as Map)) : null;
     final hargaVarian = double.tryParse('${b['harga1'] ?? ''}') ?? 0;
     if (row == null) { return {'op': 'x', 'isi': 0.0, 'hargaVarian': hargaVarian}; }
-    return {'op': '${row['op'] ?? 'x'}', 'isi': double.tryParse('${row['isi'] ?? ''}') ?? 0, 'hargaVarian': hargaVarian};
+    return {'op': row['op']?.toString() ?? 'x', 'isi': double.tryParse('${row['isi'] ?? ''}') ?? 0, 'hargaVarian': hargaVarian};
   }
 
   Widget _panelLS() {
@@ -1059,7 +1059,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
         final expanded = _lsExpand.contains(kodeB);
         return InkWell(
           // Tap DI LUAR chip putih (area hijau kartu) = pilih barang DASAR: harga1 + satuan dasar.
-          onTap: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': b['harga1'].toString(), 'satuan': (b['satuan'] ?? '').toString(), 'opPecah': '${dasarLS['op'] ?? 'x'}', 'isiSatuan': dasarLS['isi'], 'hargaVarian': dasarLS['hargaVarian']}; _qtyMPlus = null; adaQtyHitung = false; _tombolKuningAktif = ''; _resetKeyboard(); }),
+          onTap: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': b['harga1'].toString(), 'satuan': (b['satuan'] ?? '').toString(), 'opPecah': dasarLS['op']?.toString() ?? 'x', 'isiSatuan': dasarLS['isi'], 'hargaVarian': dasarLS['hargaVarian']}; _qtyMPlus = null; adaQtyHitung = false; _tombolKuningAktif = ''; _resetKeyboard(); }),
           child: Container(margin: const EdgeInsets.only(bottom: 4), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(color: aktif ? Colors.green.shade100 : Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               // SATU BARIS: avatar + {nama barang} + Kategori + edit + hapus (tidak ada baris subtitle lagi).
@@ -1079,7 +1079,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                     if (entriVarian.isEmpty) Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), child: Text('Belum ada varian', style: TextStyle(fontSize: 11, color: Colors.grey.shade600))),
                     for (var ei = 0; ei < entriVarian.length; ei++) ...[
                       if (ei > 0) Container(height: 1, color: Colors.grey.shade200),
-                      InkWell(onTap: () => setState(() { final nom = (entriVarian[ei]['nominal'] as double).toInt(); barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': nom.toString(), 'satuan': '${entriVarian[ei]['satuan']}', 'opPecah': '${entriVarian[ei]['op'] ?? 'x'}', 'isiSatuan': entriVarian[ei]['isi'], 'hargaVarian': entriVarian[ei]['hargaVarian']}; _qtyMPlus = null; adaQtyHitung = false; layar = nom.toStringAsFixed(0); entryBaru = true; _tombolKuningAktif = ''; _resetKeyboard(); }),
+                      InkWell(onTap: () => setState(() { final nom = (entriVarian[ei]['nominal'] as double).toInt(); barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': nom.toString(), 'satuan': '${entriVarian[ei]['satuan']}', 'opPecah': entriVarian[ei]['op']?.toString() ?? 'x', 'isiSatuan': entriVarian[ei]['isi'], 'hargaVarian': entriVarian[ei]['hargaVarian']}; _qtyMPlus = null; adaQtyHitung = false; layar = nom.toStringAsFixed(0); entryBaru = true; _tombolKuningAktif = ''; _resetKeyboard(); }),
                         child: Container(color: (barangDipilih != null && barangDipilih!['kode'] == b['kode'].toString() && barangDipilih!['satuan'] == '${entriVarian[ei]['satuan']}' && barangDipilih!['harga1'] == (entriVarian[ei]['nominal'] as double).toInt().toString()) ? Colors.green.shade100 : Colors.transparent, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), child: Text('${entriVarian[ei]['varian']}'.trim().isNotEmpty ? '${entriVarian[ei]['varian']} => ${entriVarian[ei]['satuan']} ✓ ${formatRupiah((entriVarian[ei]['nominal'] as double).toInt())}' : '${entriVarian[ei]['satuan']} ✓ ${formatRupiah((entriVarian[ei]['nominal'] as double).toInt())}', style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis))),
                     ],
                     if (entriVarian.isNotEmpty) Container(height: 1, color: Colors.grey.shade200),
@@ -1902,7 +1902,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           final jumlah = qtyAman * harga; // SUBTOTAL PER ITEM = qty x harga satuan. Bukan qty = subtotal.
           // ACUAN dari Tambah Barang (LS): op + isi + Harga varian baris satuan yang dipilih di LS.
           // Disimpan per baris baru, dipakai _barisItem sebagai Harga Satuan / Angka Satuan / op — BUKAN _pecahOtomatis.
-          final opLS = '${barangDipilih!["opPecah"] ?? 'x'}';
+          final opLS = barangDipilih!["opPecah"]?.toString() ?? 'x';
           final isiLS = (barangDipilih!["isiSatuan"] as num?)?.toDouble() ?? 0;
           final hargaVarianLS = (barangDipilih!["hargaVarian"] as num?)?.toDouble() ?? 0;
           final idxPoBaru = ref.read(poProvider).items.length;
