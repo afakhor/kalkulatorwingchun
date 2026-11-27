@@ -992,7 +992,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (perVarian.isNotEmpty) {
       for (var gi = 0; gi < perVarian.length; gi++) {
         final grup = (perVarian[gi] as List?) ?? [];
-        final namaBaris = (m['varian'] as String?)?.trim(); final nama = (namaBaris != null && namaBaris.isNotEmpty) ? namaBaris : (gi < namaVarian.length ? namaVarian[gi] : '');
+        final nama = gi < namaVarian.length ? namaVarian[gi] : '';
         // Harga varian grup ini (acuan Harga Satuan di CEK/PO): dari hargaList, fallback harga1 untuk varian 1.
         final hargaListB = (b['hargaList'] as List?) ?? [];
         final hargaVarianGi = gi < hargaListB.length ? (double.tryParse('${hargaListB[gi]}') ?? 0) : (gi == 0 ? (double.tryParse('${b['harga1'] ?? ''}') ?? 0) : 0);
@@ -1001,7 +1001,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           final m = Map<String, dynamic>.from(x as Map);
           final label = labelDari(m);
           if (label.trim().isEmpty) { continue; }
-          hasil.add({'varian': nama, 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0, 'op': '${m['op'] ?? 'x'}', 'isi': double.tryParse('${m['isi'] ?? ''}') ?? 0, 'hargaVarian': hargaVarianGi});
+          hasil.add({'varian': ((m['varian'] as String?)?.trim().isNotEmpty == true ? m['varian'].toString() : nama), 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0, 'op': m['op']?.toString() ?? 'x', 'isi': double.tryParse('${m['isi'] ?? ''}') ?? 0, 'hargaVarian': hargaVarianGi});
           pertama = false;
         }
       }
