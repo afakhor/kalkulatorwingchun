@@ -252,7 +252,7 @@ class PoDatabase {
     );
   }
 
-    Future<List>> muatSemuaPo() async {
+  Future<List>> muatSemuaPo() async {
     final db = await _database;
     final rows = await db.query('po_tersimpan', orderBy: 'dibuat_pada DESC');
     final hasil = >[];
@@ -291,7 +291,6 @@ class PoDatabase {
     }
     return hasil;
   }
-
 
   Future<int> simpanPoBaru({
     required String nomor,
@@ -349,7 +348,10 @@ class PoDatabase {
   }
 
   Future<void> _tulisItems(
-      Database db, int poId, List> items) async {
+    Database db,
+    int poId,
+    List> items,
+  ) async {
     final batch = db.batch();
     for (var k = 0; k < items.length; k++) {
       final e = items[k];
@@ -449,8 +451,8 @@ class PoDatabase {
     if (v.isEmpty) return;
     final db = await _database;
     final skrg = DateTime.now().millisecondsSinceEpoch;
-    final ada = await db
-        .query('pelanggan', where: 'LOWER(nama) = ?', whereArgs: [v.toLowerCase()]);
+    final ada = await db.query('pelanggan',
+        where: 'LOWER(nama) = ?', whereArgs: [v.toLowerCase()]);
     if (ada.isEmpty) {
       await db.insert('pelanggan', {'nama': v, 'terakhir_dipakai': skrg});
     } else {
@@ -461,7 +463,8 @@ class PoDatabase {
 
   Future> muatAliasCopas() async {
     final db = await _database;
-    final rows = await db.query('alias_copas', orderBy: 'terakhir_dipakai DESC');
+    final rows =
+        await db.query('alias_copas', orderBy: 'terakhir_dipakai DESC');
     return {for (final r in rows) "${r['nama_copas']}": "${r['kode_barang']}"};
   }
 
@@ -471,8 +474,8 @@ class PoDatabase {
     if (kunci.isEmpty || kodeBarang.isEmpty) return;
     final db = await _database;
     final skrg = DateTime.now().millisecondsSinceEpoch;
-    final ada =
-        await db.query('alias_copas', where: 'nama_copas = ?', whereArgs: [kunci]);
+    final ada = await db
+        .query('alias_copas', where: 'nama_copas = ?', whereArgs: [kunci]);
     if (ada.isEmpty) {
       await db.insert('alias_copas', {
         'nama_copas': kunci,
@@ -606,8 +609,9 @@ class PoDatabase {
     batch.delete('step_draf');
     var urutan = 0;
     for (final it in items) {
-      final hasChainOrOp = (it['chain'] is List && (it['chain'] as List).isNotEmpty) ||
-          (it['opPecah'] != null && it['opPecah'].toString() != 'x');
+      final hasChainOrOp =
+          (it['chain'] is List && (it['chain'] as List).isNotEmpty) ||
+              (it['opPecah'] != null && it['opPecah'].toString() != 'x');
       final satField = hasChainOrOp
           ? jsonEncode({
               'satuan': it['satuan'] ?? '',
