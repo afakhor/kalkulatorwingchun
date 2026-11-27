@@ -958,6 +958,40 @@ class _S extends ConsumerState<HomeDaftarPO> {
 
   // FORM LS di panel: cari + list barang + tap pilih + Tambah Barang.
   // Field cari = TEKS -> tap field, tombol bawah jadi keyboard QWERTY BlackBerry.
+  // Entri TABEL VARIAN LS: [{varian, tampilVarian, satuan, nominal}]. Dari satuanPerVarian (format baru);
+  // kalau kosong, dari satuanList (format lama). Baris yang satuannya kosong dibuang.
+  List<Map<String, dynamic>> _entriVarianLS(Map<String, dynamic> b) {
+    final hasil = <Map<String, dynamic>>[];
+    final namaVarian = '${b['varian'] ?? ''}'.split(',').map((x) => x.trim()).where((x) => x.isNotEmpty).toList();
+    String labelDari(Map m) { final sb = '${m['satuanBaru'] ?? ''}'; final st = '${m['satuan'] ?? ''}'; return sb.trim().isNotEmpty ? sb : st; }
+    final perVarian = (b['satuanPerVarian'] as List?) ?? [];
+    if (perVarian.isNotEmpty) {
+      for (var gi = 0; gi < perVarian.length; gi++) {
+        final grup = (perVarian[gi] as List?) ?? [];
+        final nama = gi < namaVarian.length ? namaVarian[gi] : '';
+        var pertama = true;
+        for (final x in grup) {
+          final m = Map<String, dynamic>.from(x as Map);
+          final label = labelDari(m);
+          if (label.trim().isEmpty) { continue; }
+          hasil.add({'varian': nama, 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0});
+          pertama = false;
+        }
+      }
+    }
+    if (hasil.isEmpty) {
+      var pertama = true;
+      for (final x in (b['satuanList'] as List?) ?? []) {
+        final m = Map<String, dynamic>.from(x as Map);
+        final label = labelDari(m);
+        if (label.trim().isEmpty) { continue; }
+        hasil.add({'varian': namaVarian.isNotEmpty ? namaVarian.first : '', 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0});
+        pertama = false;
+      }
+    }
+    return hasil;
+  }
+
   Widget _panelLS() {
     final q = queryLS.toLowerCase();
     final filtered = daftarBarang.where((b) {
@@ -976,19 +1010,36 @@ class _S extends ConsumerState<HomeDaftarPO> {
         final b = filtered[i];
         final idxDaftar = daftarBarang.indexWhere((x) => x['kode'] == b['kode']);
         final aktif = barangDipilih != null && barangDipilih!['kode'] == b['kode'];
-        final satuanBarang = (b['satuanList'] as List?) ?? [];
+        final entriVarian = _entriVarianLS(b);
         return InkWell(
           // Tap DI LUAR chip putih (area hijau kartu) = pilih barang DASAR: harga1 + satuan dasar.
           onTap: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': b['harga1'].toString(), 'satuan': (b['satuan'] ?? '').toString()}; _qtyMPlus = null; adaQtyHitung = false; _tombolKuningAktif = ''; _resetKeyboard(); }),
           child: Container(margin: const EdgeInsets.only(bottom: 4), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(color: aktif ? Colors.green.shade100 : Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [CircleAvatar(radius: 14, child: Text(b['nama'].toString().isEmpty ? '?' : b['nama'].toString()[0].toLowerCase(), style: const TextStyle(fontSize: 12))), const SizedBox(width: 6), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${b['nama']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis), Text('${b['kode']} • ${b['kategori']} • ${b['satuan'] ?? 'sak'}', style: const TextStyle(fontSize: 10, color: Colors.grey))])), const SizedBox(width: 4),
+              // SATU BARIS: avatar + {nama barang} + Kategori + edit + hapus (tidak ada baris subtitle lagi).
+              Row(children: [CircleAvatar(radius: 14, child: Text(b['nama'].toString().isEmpty ? '?' : b['nama'].toString()[0].toLowerCase(), style: const TextStyle(fontSize: 12))), const SizedBox(width: 6), Expanded(child: Text.rich(TextSpan(children: [TextSpan(text: '${b['nama']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)), TextSpan(text: '  •  ${b['kategori']}', style: const TextStyle(fontSize: 11, color: Colors.grey))]), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 4),
               // Ikon EDIT: buka form Tambah Barang, isinya dari barang ini, simpan = update.
               IconButton(icon: const Icon(Icons.edit, size: 18, color: Colors.teal), tooltip: 'Edit barang', padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28), onPressed: () => bukaFormTambahBarang(barangEdit: b)),
               // Ikon HAPUS: hapus barang dari LS. Kalau barang ini sedang dipilih, lepas pilihannya.
               IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), tooltip: 'Hapus barang', padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28), onPressed: () { if (idxDaftar >= 0) { setState(() { daftarBarang.removeAt(idxDaftar); if (barangDipilih != null && barangDipilih!['kode'] == b['kode']) { barangDipilih = null; } }); } }),
             ]),
-              if (satuanBarang.isNotEmpty) ...[const SizedBox(height: 4), Wrap(spacing: 3, runSpacing: 3, children: satuanBarang.where((x) { final m = Map<String, dynamic>.from(x as Map); final label = (m['satuanBaru']?.toString().isNotEmpty == true) ? m['satuanBaru'].toString() : m['satuan'].toString(); return label.trim().isNotEmpty; }).map<Widget>((x) { final m = Map<String, dynamic>.from(x as Map); final nom = double.tryParse(m['nominal'].toString()) ?? 0; final labelSatuan = (m['satuanBaru']?.toString().isNotEmpty == true) ? m['satuanBaru'].toString() : m['satuan'].toString(); return ActionChip(label: Text('$labelSatuan - ${formatRupiah(nom.toInt())}', style: const TextStyle(fontSize: 9)), onPressed: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': nom.toInt().toString(), 'satuan': labelSatuan}; _qtyMPlus = null; adaQtyHitung = false; layar = nom.toStringAsFixed(0); entryBaru = true; _tombolKuningAktif = ''; _resetKeyboard(); })); /* tap chip PUTIH = pilih VARIAN yang ditap: nominal + satuan chip itu, harga chip tampil di layar */ }).toList())],
+              // TABEL 3 KOLOM: Nama Varian | Satuan | Harga. Tap baris = pilih varian itu (nominal + satuan baris itu, harga tampil di layar).
+              if (entriVarian.isNotEmpty) ...[const SizedBox(height: 4),
+                Container(decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8), color: Colors.white),
+                  child: Column(children: [
+                    Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
+                      child: Row(children: const [Expanded(flex: 4, child: Text('Varian', style: TextStyle(fontSize: 9, color: Colors.grey))), Expanded(flex: 3, child: Text('Satuan', textAlign: TextAlign.center, style: TextStyle(fontSize: 9, color: Colors.grey))), Expanded(flex: 3, child: Text('Harga', textAlign: TextAlign.right, style: TextStyle(fontSize: 9, color: Colors.grey)))])),
+                    for (var ei = 0; ei < entriVarian.length; ei++) ...[
+                      if (ei > 0) Container(height: 1, color: Colors.grey.shade200),
+                      InkWell(onTap: () => setState(() { final nom = (entriVarian[ei]['nominal'] as double).toInt(); barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': nom.toString(), 'satuan': '${entriVarian[ei]['satuan']}'}; _qtyMPlus = null; adaQtyHitung = false; layar = nom.toStringAsFixed(0); entryBaru = true; _tombolKuningAktif = ''; _resetKeyboard(); }),
+                        child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: Row(children: [
+                          Expanded(flex: 4, child: Text(entriVarian[ei]['tampilVarian'] == true ? '${entriVarian[ei]['varian']}' : '', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          Expanded(flex: 3, child: Text('${entriVarian[ei]['satuan']}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          Expanded(flex: 3, child: Text(formatRupiah((entriVarian[ei]['nominal'] as double).toInt()), textAlign: TextAlign.right, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        ]))),
+                    ],
+                  ])),
+              ],
             ])),
         );
       })),
@@ -2007,18 +2058,16 @@ class _S extends ConsumerState<HomeDaftarPO> {
                       final it = e.value;
                       return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(8), decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(10), color: Colors.white),
                         child: Column(children: [
-                          Row(children: [
-                            _AutoField(controller: it.qtyCtrl, hint: "1", angka: true, min: 44, max: 90, onChanged: (v) => setSheet(() { it.nominalManual = false; refreshNominal(it, hargaTeks: hargaCtrls[gi].text); })),
-                            const SizedBox(width: 4),
-                            _AutoField(controller: it.namaCtrl, hint: "satuan", min: 52, max: 140, onTap: () => setSheet(() { _satuanCtrlDialog = it.namaCtrl; }), onChanged: (v) { if (it.dasar) { unitCtrl.text = v; } setSheet(() => refreshNominal(it, hargaTeks: hargaCtrls[gi].text)); }),
-                            const SizedBox(width: 4),
+                          // Wrap (BUKAN Row): baris tidak pernah meluber keluar dialog, jadi tombol X selalu di dalam batas layar & bisa dipencet.
+                          Wrap(spacing: 4, runSpacing: 4, children: [
+                            _AutoField(controller: it.qtyCtrl, hint: "1", angka: true, min: 44, max: 70, onChanged: (v) => setSheet(() { it.nominalManual = false; refreshNominal(it, hargaTeks: hargaCtrls[gi].text); })),
+                            _AutoField(controller: it.namaCtrl, hint: "satuan", min: 52, max: 100, onTap: () => setSheet(() { _satuanCtrlDialog = it.namaCtrl; }), onChanged: (v) { if (it.dasar) { unitCtrl.text = v; } setSheet(() => refreshNominal(it, hargaTeks: hargaCtrls[gi].text)); }),
                             SizedBox(width: 36, height: 36, child: InkWell(onTap: () => setSheet(() { it.op = it.op == "x" ? "÷" : "x"; it.nominalManual = false; refreshNominal(it, hargaTeks: hargaCtrls[gi].text); }), borderRadius: BorderRadius.circular(18), child: Container(decoration: BoxDecoration(color: it.op == "÷" ? Colors.teal.shade100 : Colors.orange.shade100, shape: BoxShape.circle, border: Border.all(color: Colors.grey.shade400)), child: Center(child: Text(it.op, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))))),
-                            const SizedBox(width: 4),
-                            _AutoField(controller: it.isiCtrl, hint: "isi", angka: true, min: 44, max: 90, onChanged: (v) => setSheet(() { it.nominalManual = false; refreshNominal(it, hargaTeks: hargaCtrls[gi].text); })),
-                            const SizedBox(width: 4),
-                            _AutoField(controller: it.satuanBaruCtrl, hint: "unit", min: 52, max: 140, onTap: () => setSheet(() { _satuanCtrlDialog = it.satuanBaruCtrl; }), onChanged: (v) { tambahKeDaftarSatuan(v); setSheet(() => refreshNominal(it, hargaTeks: hargaCtrls[gi].text)); }),
+                            _AutoField(controller: it.isiCtrl, hint: "isi", angka: true, min: 44, max: 70, onChanged: (v) => setSheet(() { it.nominalManual = false; refreshNominal(it, hargaTeks: hargaCtrls[gi].text); })),
+                            _AutoField(controller: it.satuanBaruCtrl, hint: "unit", min: 52, max: 100, onTap: () => setSheet(() { _satuanCtrlDialog = it.satuanBaruCtrl; }), onChanged: (v) { tambahKeDaftarSatuan(v); setSheet(() => refreshNominal(it, hargaTeks: hargaCtrls[gi].text)); }),
                             IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 30, minHeight: 30), tooltip: it.dasar ? "Dasar" : "Jadikan dasar", icon: Icon(it.dasar ? Icons.check_circle : Icons.radio_button_unchecked, color: it.dasar ? Colors.green : Colors.grey, size: 22), onPressed: () => setSheet(() { for (var x in grup) { x.dasar = false; } it.dasar = true; syncUnitDariDasar(grup: gi); refreshSemuaNominal(); })),
-                            IconButton(icon: const Icon(Icons.close, color: Colors.red, size: 16), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 26, minHeight: 26), onPressed: () => setSheet(() { if (grup.length > 1) { grup.removeAt(e.key); } })),
+                            // X HAPUS BARIS: area tap 36x36. Kalau barisnya tinggal 1, X = kosongkan baris (biar tiap tap selalu ada hasil, tidak diam).
+                            IconButton(icon: const Icon(Icons.close, color: Colors.red, size: 20), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 36, minHeight: 36), tooltip: 'Hapus baris satuan', onPressed: () => setSheet(() { if (grup.length > 1) { grup.removeAt(e.key); } else { it.qtyCtrl.clear(); it.namaCtrl.clear(); it.isiCtrl.clear(); it.satuanBaruCtrl.clear(); it.nominalManual = false; refreshNominal(it, hargaTeks: hargaCtrls[gi].text); } })),
                           ]),
                           // SARAN SATUAN: hanya untuk field satuan (biru/hijau) yang terakhir ditap di baris ini. Tap = isi.
                           if ((_satuanCtrlDialog == it.namaCtrl || _satuanCtrlDialog == it.satuanBaruCtrl) && _satuanCtrlDialog != null) _chipSaranForm(_saranSatuan(_satuanCtrlDialog!.text), _satuanCtrlDialog!, setSheet),
