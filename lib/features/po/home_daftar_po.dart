@@ -184,7 +184,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     super.dispose();
   }
 
-    @override
+  @override
   void setState(VoidCallback fn) {
     super.setState(fn);
     _jadwalSimpanDB();
@@ -359,7 +359,6 @@ class _S extends ConsumerState<HomeDaftarPO> {
   final List> _poTersimpan = [];
   Map<String, TextEditingController> _poCtrls = {};
   int _poTerbukaIndex = -1;
-
 
   final Map<String, TextEditingController> _pecahCtrls = {};
   final Map<String, String> _opPecah = {};
@@ -1308,8 +1307,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
               final it = saran[i];
               return ActionChip(
                 label: Text(
-                  it['label'] +
-                      (it['sub'] == '' ? '' : '  •  ${it['sub']}'),
+                  '${it['label']}${it['sub'] == '' ? '' : '  •  ${it['sub']}'}',
                   style: const TextStyle(fontSize: 12),
                 ),
                 backgroundColor: Colors.white,
@@ -2258,7 +2256,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 8, vertical: 6),
                                   child: Text(
-                                    '${entriVarian[ei]['varian']}'.trim().isNotEmpty
+                                    '${entriVarian[ei]['varian'] ?? ''}'.trim().isNotEmpty
                                         ? '${entriVarian[ei]['varian']} => ${entriVarian[ei]['satuan']} ✓ ${formatRupiah((entriVarian[ei]['nominal'] as double).round())}'
                                         : '${entriVarian[ei]['satuan']} ✓ ${formatRupiah((entriVarian[ei]['nominal'] as double).round())}',
                                     style: const TextStyle(fontSize: 12),
@@ -2899,13 +2897,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
               : ListView.builder(
                   itemCount: n,
                   itemBuilder: (_, i) {
-                    final chainPo = _poChain.putIfAbsent(i, () => []);
+                    final chainPo =
+                        _poChain.putIfAbsent(i, () => >[]);
                     for (var j = 0; j < chainPo.length; j++) {
                       _chainCtrls.putIfAbsent(
                         'po-$i-chain-$j',
                         () => TextEditingController(
-                            text:
-                                '${((chainPo[j] as Map)['angka'] as num?)?.toDouble() ?? 0}'),
+                            text: '${(chainPo[j]['angka'] as num?)?.toDouble() ?? 0}'),
                       );
                     }
                     return _barisItem(
@@ -2959,7 +2957,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                         _commitSemuaBarisPO();
                         setState(() {
                           _poChain
-                              .putIfAbsent(i, () => [])
+                              .putIfAbsent(i, () => >[])
                               .add({'ops': 'x', 'angka': 0.0});
                         });
                       },
@@ -2979,7 +2977,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           (_poChain[i]!).removeAt(j);
                           for (var k = 0; k < (_poChain[i]!).length; k++) {
                             _chainCtrls['po-$i-chain-$k']?.text =
-                                '${(((_poChain[i]!)[k] as Map)['angka'] as num?)?.toDouble() ?? 0}';
+                                '${((_poChain[i]!)[k]['angka'] as num?)?.toDouble() ?? 0}';
                           }
                           final keysToDrop = _chainCtrls.keys
                               .where((key) =>
