@@ -526,6 +526,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
   bool _sembunyiSaranField = false;
   // Field satuan (biru/hijau) di dialog Tambah Barang yang terakhir ditap - chip saran hanya untuk field ini.
   TextEditingController? _satuanCtrlDialog;
+  // Kode barang LS yang sedang di-MAXIMIZE (daftar variannya dibuka). Default: semua ciut, hanya 1 baris.
+  final Set<String> _lsExpand = {};
   // Cari barang yang namanya PERSIS sama (beda besar/kecil huruf boleh) - untuk autocorrect + auto-isi.
   Map<String, dynamic>? _barangDariNama(String ketik) {
     final q = ketik.trim().toLowerCase();
@@ -1011,6 +1013,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
         final idxDaftar = daftarBarang.indexWhere((x) => x['kode'] == b['kode']);
         final aktif = barangDipilih != null && barangDipilih!['kode'] == b['kode'];
         final entriVarian = _entriVarianLS(b);
+        final kodeB = b['kode'].toString();
+        final expanded = _lsExpand.contains(kodeB);
         return InkWell(
           // Tap DI LUAR chip putih (area hijau kartu) = pilih barang DASAR: harga1 + satuan dasar.
           onTap: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': b['harga1'].toString(), 'satuan': (b['satuan'] ?? '').toString()}; _qtyMPlus = null; adaQtyHitung = false; _tombolKuningAktif = ''; _resetKeyboard(); }),
@@ -1018,29 +1022,31 @@ class _S extends ConsumerState<HomeDaftarPO> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               // SATU BARIS: avatar + {nama barang} + Kategori + edit + hapus (tidak ada baris subtitle lagi).
               Row(children: [CircleAvatar(radius: 14, child: Text(b['nama'].toString().isEmpty ? '?' : b['nama'].toString()[0].toLowerCase(), style: const TextStyle(fontSize: 12))), const SizedBox(width: 6), Expanded(child: Text.rich(TextSpan(children: [TextSpan(text: '${b['nama']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)), TextSpan(text: '  •  ${b['kategori']}', style: const TextStyle(fontSize: 11, color: Colors.grey))]), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 4),
+                // Ikon MAXIMIZE: tap -> buka/tutup daftar varian (varian => satuan ✓ harga). Tap-tap saja, tanpa ketik.
+                IconButton(icon: Icon(expanded ? Icons.close_fullscreen : Icons.open_in_full, size: 18, color: Colors.teal), tooltip: expanded ? 'Ciutkan' : 'Maximize - lihat varian', padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28), onPressed: () => setState(() { if (expanded) { _lsExpand.remove(kodeB); } else { _lsExpand.add(kodeB); } })),
               // Ikon EDIT: buka form Tambah Barang, isinya dari barang ini, simpan = update.
               IconButton(icon: const Icon(Icons.edit, size: 18, color: Colors.teal), tooltip: 'Edit barang', padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28), onPressed: () => bukaFormTambahBarang(barangEdit: b)),
               // Ikon HAPUS: hapus barang dari LS. Kalau barang ini sedang dipilih, lepas pilihannya.
               IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), tooltip: 'Hapus barang', padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28), onPressed: () { if (idxDaftar >= 0) { setState(() { daftarBarang.removeAt(idxDaftar); if (barangDipilih != null && barangDipilih!['kode'] == b['kode']) { barangDipilih = null; } }); } }),
             ]),
-              // TABEL 3 KOLOM: Nama Varian | Satuan | Harga. Tap baris = pilih varian itu (nominal + satuan baris itu, harga tampil di layar).
-              if (entriVarian.isNotEmpty) ...[const SizedBox(height: 4),
+              // MAXIMIZE: tap ikon maximize di baris -> muncul daftar varian tap-tap, 1 garis per satuan:
+              // varian => satuan ✓ harga. Tap garis = pilih varian itu (satuan + harga terpilih, harga tampil di layar).
+              if (expanded) ...[const SizedBox(height: 4),
                 Container(decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8), color: Colors.white),
-                  child: Column(children: [
-                    Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
-                      child: Row(children: const [Expanded(flex: 4, child: Text('Varian', style: TextStyle(fontSize: 9, color: Colors.grey))), Expanded(flex: 3, child: Text('Satuan', textAlign: TextAlign.center, style: TextStyle(fontSize: 9, color: Colors.grey))), Expanded(flex: 3, child: Text('Harga', textAlign: TextAlign.right, style: TextStyle(fontSize: 9, color: Colors.grey)))])),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    if (entriVarian.isEmpty) Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), child: Text('Belum ada varian', style: TextStyle(fontSize: 11, color: Colors.grey.shade600))),
                     for (var ei = 0; ei < entriVarian.length; ei++) ...[
                       if (ei > 0) Container(height: 1, color: Colors.grey.shade200),
                       InkWell(onTap: () => setState(() { final nom = (entriVarian[ei]['nominal'] as double).toInt(); barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': nom.toString(), 'satuan': '${entriVarian[ei]['satuan']}'}; _qtyMPlus = null; adaQtyHitung = false; layar = nom.toStringAsFixed(0); entryBaru = true; _tombolKuningAktif = ''; _resetKeyboard(); }),
-                        child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: Row(children: [
-                          Expanded(flex: 4, child: Text(entriVarian[ei]['tampilVarian'] == true ? '${entriVarian[ei]['varian']}' : '', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          Expanded(flex: 3, child: Text('${entriVarian[ei]['satuan']}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          Expanded(flex: 3, child: Text(formatRupiah((entriVarian[ei]['nominal'] as double).toInt()), textAlign: TextAlign.right, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                        ]))),
+                        child: Container(color: (barangDipilih != null && barangDipilih!['kode'] == b['kode'].toString() && barangDipilih!['satuan'] == '${entriVarian[ei]['satuan']}' && barangDipilih!['harga1'] == (entriVarian[ei]['nominal'] as double).toInt().toString()) ? Colors.green.shade100 : Colors.transparent, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), child: Text('${entriVarian[ei]['varian']}'.trim().isNotEmpty ? '${entriVarian[ei]['varian']} => ${entriVarian[ei]['satuan']} ✓ ${formatRupiah((entriVarian[ei]['nominal'] as double).toInt())}' : '${entriVarian[ei]['satuan']} ✓ ${formatRupiah((entriVarian[ei]['nominal'] as double).toInt())}', style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis))),
                     ],
+                    if (entriVarian.isNotEmpty) Container(height: 1, color: Colors.grey.shade200),
+                    // Belum ada varian / mau nambah: tap -> buka form Tambah Barang (edit barang ini, isi varian + satuan + harga).
+                    InkWell(onTap: () => bukaFormTambahBarang(barangEdit: b), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), child: Text('+ Tambah varian', style: TextStyle(fontSize: 12, color: Colors.teal.shade700, fontWeight: FontWeight.bold)))),
                   ])),
+              ]
               ],
-            ])),
+            )),
         );
       })),
     ]);
