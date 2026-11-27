@@ -252,7 +252,7 @@ class PoDatabase {
     );
   }
 
-  Future<List>> muatSemuaPo() async {
+    Future<List>> muatSemuaPo() async {
     final db = await _database;
     final rows = await db.query('po_tersimpan', orderBy: 'dibuat_pada DESC');
     final hasil = >[];
@@ -291,6 +291,7 @@ class PoDatabase {
     }
     return hasil;
   }
+
 
   Future<int> simpanPoBaru({
     required String nomor,
