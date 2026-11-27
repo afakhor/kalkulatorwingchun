@@ -992,7 +992,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (perVarian.isNotEmpty) {
       for (var gi = 0; gi < perVarian.length; gi++) {
         final grup = (perVarian[gi] as List?) ?? [];
-        final nama = gi < namaVarian.length ? namaVarian[gi] : '';
+        final namaBaris = (m['varian'] as String?)?.trim(); final nama = (namaBaris != null && namaBaris.isNotEmpty) ? namaBaris : (gi < namaVarian.length ? namaVarian[gi] : '');
         // Harga varian grup ini (acuan Harga Satuan di CEK/PO): dari hargaList, fallback harga1 untuk varian 1.
         final hargaListB = (b['hargaList'] as List?) ?? [];
         final hargaVarianGi = gi < hargaListB.length ? (double.tryParse('${hargaListB[gi]}') ?? 0) : (gi == 0 ? (double.tryParse('${b['harga1'] ?? ''}') ?? 0) : 0);
@@ -1001,7 +1001,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           final m = Map<String, dynamic>.from(x as Map);
           final label = labelDari(m);
           if (label.trim().isEmpty) { continue; }
-          hasil.add({'varian': nama, 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0, 'op': m['op']?.toString() ?? 'x', 'isi': double.tryParse('${m['isi'] ?? ''}') ?? 0, 'hargaVarian': hargaVarianGi});
+          hasil.add({'varian': nama, 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0, 'op': '${m['op'] ?? 'x'}', 'isi': double.tryParse('${m['isi'] ?? ''}') ?? 0, 'hargaVarian': hargaVarianGi});
           pertama = false;
         }
       }
@@ -1012,7 +1012,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
         final m = Map<String, dynamic>.from(x as Map);
         final label = labelDari(m);
         if (label.trim().isEmpty) { continue; }
-        hasil.add({'varian': namaVarian.isNotEmpty ? namaVarian.first : '', 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0, 'op': m['op']?.toString() ?? 'x', 'isi': double.tryParse('${m['isi'] ?? ''}') ?? 0, 'hargaVarian': double.tryParse('${b['harga1'] ?? ''}') ?? 0});
+        hasil.add({'varian': ((m['varian'] as String?)?.trim().isNotEmpty == true ? m['varian'].toString() : (namaVarian.isNotEmpty ? namaVarian.first : '')), 'tampilVarian': pertama, 'satuan': label, 'nominal': double.tryParse('${m['nominal'] ?? ''}') ?? 0, 'op': m['op']?.toString() ?? 'x', 'isi': double.tryParse('${m['isi'] ?? ''}') ?? 0, 'hargaVarian': double.tryParse('${b['harga1'] ?? ''}') ?? 0});
         pertama = false;
       }
     }
@@ -1032,7 +1032,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     row ??= ((b['satuanList'] as List?) ?? []).isNotEmpty ? Map<String, dynamic>.from(((b['satuanList'] as List).first as Map)) : null;
     final hargaVarian = double.tryParse('${b['harga1'] ?? ''}') ?? 0;
     if (row == null) { return {'op': 'x', 'isi': 0.0, 'hargaVarian': hargaVarian}; }
-    return {'op': row['op']?.toString() ?? 'x', 'isi': double.tryParse('${row['isi'] ?? ''}') ?? 0, 'hargaVarian': hargaVarian};
+    return {'op': '${row['op'] ?? 'x'}', 'isi': double.tryParse('${row['isi'] ?? ''}') ?? 0, 'hargaVarian': hargaVarian};
   }
 
   Widget _panelLS() {
@@ -1057,20 +1057,19 @@ class _S extends ConsumerState<HomeDaftarPO> {
         final dasarLS = _barisDasarLS(b);
         final kodeB = b['kode'].toString();
         final expanded = _lsExpand.contains(kodeB);
-        return InkWell(
-          // Tap DI LUAR chip putih (area hijau kartu) = pilih barang DASAR: harga1 + satuan dasar.
-          onTap: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': b['harga1'].toString(), 'satuan': (b['satuan'] ?? '').toString(), 'opPecah': dasarLS['op']?.toString() ?? 'x', 'isiSatuan': dasarLS['isi'], 'hargaVarian': dasarLS['hargaVarian']}; _qtyMPlus = null; adaQtyHitung = false; _tombolKuningAktif = ''; _resetKeyboard(); }),
-          child: Container(margin: const EdgeInsets.only(bottom: 4), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(color: aktif ? Colors.green.shade100 : Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
+          // Tap BARIS HEADER kartu = pilih barang DASAR (harga1 + satuan dasar). Garis varian TIDAK lagi di dalam InkWell kartu,
+          // jadi tap garis varian tidak ketimpa tap dasar lagi (dulu: tap garis ikut memicu tap dasar -> pilihan varian selalu kembali ke dasar).
+          return Container(margin: const EdgeInsets.only(bottom: 4), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(color: aktif ? Colors.green.shade100 : Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               // SATU BARIS: avatar + {nama barang} + Kategori + edit + hapus (tidak ada baris subtitle lagi).
-              Row(children: [CircleAvatar(radius: 14, child: Text(b['nama'].toString().isEmpty ? '?' : b['nama'].toString()[0].toLowerCase(), style: const TextStyle(fontSize: 12))), const SizedBox(width: 6), Expanded(child: Text.rich(TextSpan(children: [TextSpan(text: '${b['nama']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)), TextSpan(text: '  •  ${b['kategori']}', style: const TextStyle(fontSize: 11, color: Colors.grey))]), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 4),
+              InkWell(onTap: () => setState(() { barangDipilih = {'kode': b['kode'].toString(), 'nama': b['nama'].toString(), 'kategori': b['kategori'].toString(), 'harga1': b['harga1'].toString(), 'satuan': (b['satuan'] ?? '').toString(), 'opPecah': dasarLS['op']?.toString() ?? 'x', 'isiSatuan': dasarLS['isi'], 'hargaVarian': dasarLS['hargaVarian']}; _qtyMPlus = null; adaQtyHitung = false; _tombolKuningAktif = ''; _resetKeyboard(); }), child: Row(children: [CircleAvatar(radius: 14, child: Text(b['nama'].toString().isEmpty ? '?' : b['nama'].toString()[0].toLowerCase(), style: const TextStyle(fontSize: 12))), const SizedBox(width: 6), Expanded(child: Text.rich(TextSpan(children: [TextSpan(text: '${b['nama']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)), TextSpan(text: '  •  ${b['kategori']}', style: const TextStyle(fontSize: 11, color: Colors.grey))]), maxLines: 1, overflow: TextOverflow.ellipsis)), const SizedBox(width: 4),
                 // Ikon MAXIMIZE: tap -> buka/tutup daftar varian (varian => satuan ✓ harga). Tap-tap saja, tanpa ketik.
                 IconButton(icon: Icon(expanded ? Icons.close_fullscreen : Icons.open_in_full, size: 18, color: Colors.teal), tooltip: expanded ? 'Ciutkan' : 'Maximize - lihat varian', padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28), onPressed: () => setState(() { if (expanded) { _lsExpand.remove(kodeB); } else { _lsExpand.add(kodeB); } })),
               // Ikon EDIT: buka form Tambah Barang, isinya dari barang ini, simpan = update.
               IconButton(icon: const Icon(Icons.edit, size: 18, color: Colors.teal), tooltip: 'Edit barang', padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28), onPressed: () => bukaFormTambahBarang(barangEdit: b)),
               // Ikon HAPUS: hapus barang dari LS. Kalau barang ini sedang dipilih, lepas pilihannya.
               IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), tooltip: 'Hapus barang', padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28), onPressed: () { if (idxDaftar >= 0) { setState(() { daftarBarang.removeAt(idxDaftar); if (barangDipilih != null && barangDipilih!['kode'] == b['kode']) { barangDipilih = null; } }); } }),
-            ]),
+            ])),
               // MAXIMIZE: tap ikon maximize di baris -> muncul daftar varian tap-tap, 1 garis per satuan:
               // varian => satuan ✓ harga. Tap garis = pilih varian itu (satuan + harga terpilih, harga tampil di layar).
               if (expanded) ...[const SizedBox(height: 4),
@@ -1088,8 +1087,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                   ])),
               ]
               ],
-            )),
-        );
+            ));
       })),
     ]);
   }
@@ -1902,7 +1900,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           final jumlah = qtyAman * harga; // SUBTOTAL PER ITEM = qty x harga satuan. Bukan qty = subtotal.
           // ACUAN dari Tambah Barang (LS): op + isi + Harga varian baris satuan yang dipilih di LS.
           // Disimpan per baris baru, dipakai _barisItem sebagai Harga Satuan / Angka Satuan / op — BUKAN _pecahOtomatis.
-          final opLS = barangDipilih!["opPecah"]?.toString() ?? 'x';
+          final opLS = (barangDipilih!["opPecah"]?.toString() ?? 'x');
           final isiLS = (barangDipilih!["isiSatuan"] as num?)?.toDouble() ?? 0;
           final hargaVarianLS = (barangDipilih!["hargaVarian"] as num?)?.toDouble() ?? 0;
           final idxPoBaru = ref.read(poProvider).items.length;
@@ -2149,9 +2147,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
                   // SIMPAN PER VARIAN: hargaList + satuanPerVarian (format baru) + harga1 + satuanList gabungan (format lama, dibaca LS).
                   // Baris satuan yang biru + hijaunya sama-sama kosong DIBUANG (Varian 2 yang tidak diisi satuannya tidak jadi chip '- Rp 73' di LS).
                   final hargaListSimpan = hargaCtrls.map((c) => c.text.replaceAll(RegExp(r'[^0-9]'), '')).toList();
-                  final satuanPerVarianSimpan = satuanPerVarian.map((g) => g.where((x) => x.namaCtrl.text.trim().isNotEmpty || x.satuanBaruCtrl.text.trim().isNotEmpty).toList()).toList();
-                  final gabunganSimpan = satuanPerVarianSimpan.expand((g) => g.map((x) => x.toMap())).toList();
-                  final barangBaru = {"kode": kodeCtrl.text, "nama": namaCtrl.text, "kategori": kategoriPilih, "harga1": hargaListSimpan.isEmpty ? '' : hargaListSimpan.first, "hargaList": hargaListSimpan, "satuan": unitCtrl.text, "varian": varian, "satuanList": gabunganSimpan, "satuanPerVarian": satuanPerVarianSimpan.map((g) => g.map((x) => x.toMap()).toList()).toList()};
+                  final satuanPerVarianSimpan = satuanPerVarian.asMap().entries.map((e) { final namaV = e.key < varianCtrls.length ? varianCtrls[e.key].text.trim() : ''; return e.value.where((x) => x.namaCtrl.text.trim().isNotEmpty || x.satuanBaruCtrl.text.trim().isNotEmpty).map((x) => {...x.toMap(), 'varian': namaV}).toList(); }).toList();
+                  final gabunganSimpan = satuanPerVarianSimpan.expand((g) => g).toList();
+                  final barangBaru = {"kode": kodeCtrl.text, "nama": namaCtrl.text, "kategori": kategoriPilih, "harga1": hargaListSimpan.isEmpty ? '' : hargaListSimpan.first, "hargaList": hargaListSimpan, "satuan": unitCtrl.text, "varian": varian, "satuanList": gabunganSimpan, "satuanPerVarian": satuanPerVarianSimpan};
                   harga1Ctrl.text = hargaCtrls.isEmpty ? '' : hargaCtrls.first.text; // cermin field lama
                   satuanList = gabunganSimpan.map((m) => SatuanItem(satuan: '${m["satuan"] ?? ''}', dasar: m["dasar"] == true, qty: '${m["qty"] ?? ''}', isi: '${m["isi"] ?? ''}', op: '${m["op"] ?? 'x'}', nominal: '${m["nominal"] ?? ''}', satuanBaru: '${m["satuanBaru"] ?? ''}')).toList(); // cermin gabungan
                   if (edit) {
@@ -2161,7 +2159,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
                     // Kalau barang yang diedit sedang dipilih, update pilihannya juga.
                     if (barangDipilih != null && barangDipilih!["kode"] == kodeLama) { barangDipilih = {"kode": kodeCtrl.text, "nama": namaCtrl.text, "kategori": kategoriPilih, "harga1": hargaListSimpan.isEmpty ? '' : hargaListSimpan.first}; }
                   } else {
-                    daftarBarang.add(barangBaru);
+                    final idxSama = daftarBarang.indexWhere((x) => x["kode"] == kodeCtrl.text);
+                    if (idxSama >= 0) { daftarBarang[idxSama] = barangBaru; } else { daftarBarang.add(barangBaru); }
                     barangDipilih = {"kode": kodeCtrl.text, "nama": namaCtrl.text, "kategori": kategoriPilih, "harga1": hargaListSimpan.isEmpty ? '' : hargaListSimpan.first};
                   }
                 }); _simpanSemuaKeDB(); Navigator.pop(ctx); }, child: Text(edit ? "Update Barang" : "Simpan Barang", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))),
