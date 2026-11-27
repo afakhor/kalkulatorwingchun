@@ -1,176 +1,379 @@
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import '../po/po_models.dart';
-import '../calculator/po_calculator.dart';
+import 'package:printing/printing.dart';
 import '../../core/formatter.dart';
+import '../calculator/po_calculator.dart';
+import '../po/po_models.dart';
 
-// PDF FAKTUR - layout SAMA dengan NotaPreview RAPI + angka DOT-MATRIX.
-// PDF tidak bisa pakai CustomPainter Flutter, jadi dot-matrix digambar manual:
-// tiap karakter = grid 5 kolom x 7 baris titik (lingkaran kecil). Hasilnya mirip DotMatrixText di layar,
-// tapi tetap kebaca & muat di kolom (titik 1.1pt, bukan font 12 yang meluber).
-
-// Pola dot-matrix 5x7 untuk karakter yang dipakai di angka: 0-9, ` , . - dan spasi.
-// Tiap string = 7 baris, tiap baris 5 karakter, '#' = titik nyala, '.' = mati.
-const Map<String, List<String>> _dotPola = {
-  '0': ['.###.', '#...#', '#..##', '#.#.#', '##..#', '#...#', '.###.'],
-  '1': ['..#..', '.##..', '..#..', '..#..', '..#..', '..#..', '.###.'],
-  '2': ['.###.', '#...#', '....#', '...#.', '..#..', '.#...', '#####'],
-  '3': ['#####', '...#.', '..#..', '...#.', '....#', '#...#', '.###.'],
-  '4': ['...#.', '..##.', '.#.#.', '#..#.', '#####', '...#.', '...#.'],
-  '5': ['#####', '#....', '####.', '....#', '....#', '#...#', '.###.'],
-  '6': ['.###.', '#....', '#....', '####.', '#...#', '#...#', '.###.'],
-  '7': ['#####', '....#', '...#.', '..#..', '..#..', '..#..', '..#..'],
-  '8': ['.###.', '#...#', '#...#', '.###.', '#...#', '#...#', '.###.'],
-  '9': ['.###.', '#...#', '#...#', '.####', '....#', '....#', '.###.'],
-  '`': ['.#...', '.#...', '..#..', '.....', '.....', '.....', '.....'],
-  ',': ['.....', '.....', '.....', '.....', '.##..', '.##..', '.#...'],
-  '.': ['.....', '.....', '.....', '.....', '.....', '.##..', '.##..'],
-  '-': ['.....', '.....', '.....', '.###.', '.....', '.....', '.....'],
-  ' ': ['.....', '.....', '.....', '.....', '.....', '.....', '.....'],
+const Map<String, List<String>> _gly = {
+  '0': [
+    '01110',
+    '10001',
+    '10011',
+    '10101',
+    '11001',
+    '10001',
+    '01110',
+  ],
+  '1': [
+    '00100',
+    '01100',
+    '00100',
+    '00100',
+    '00100',
+    '00100',
+    '01110',
+  ],
+  '2': [
+    '01110',
+    '10001',
+    '00001',
+    '00110',
+    '01000',
+    '10000',
+    '11111',
+  ],
+  '3': [
+    '11110',
+    '00001',
+    '00001',
+    '01110',
+    '00001',
+    '00001',
+    '11110',
+  ],
+  '4': [
+    '00010',
+    '00110',
+    '01010',
+    '10010',
+    '11111',
+    '00010',
+    '00010',
+  ],
+  '5': [
+    '11111',
+    '10000',
+    '11110',
+    '00001',
+    '00001',
+    '10001',
+    '01110',
+  ],
+  '6': [
+    '01110',
+    '10000',
+    '11110',
+    '10001',
+    '10001',
+    '10001',
+    '01110',
+  ],
+  '7': [
+    '11111',
+    '00001',
+    '00010',
+    '00100',
+    '01000',
+    '01000',
+    '01000',
+  ],
+  '8': [
+    '01110',
+    '10001',
+    '10001',
+    '01110',
+    '10001',
+    '10001',
+    '01110',
+  ],
+  '9': [
+    '01110',
+    '10001',
+    '10001',
+    '01111',
+    '00001',
+    '00001',
+    '01110',
+  ],
+  '`': ['00100', '01000', '00000', '00000', '00000', '00000', '00000'],
+  '.': ['00000', '00000', '00000', '00000', '00000', '01100', '01100'],
+  ',': ['00000', '00000', '00000', '00000', '00000', '01100', '01000'],
+  '-': ['00000', '00000', '00000', '11111', '00000', '00000', '00000'],
+  ' ': ['000', '000', '000', '000', '000', '000', '000'],
 };
 
-// Satu karakter dot-matrix: kolom titik, ukuran titik bisa diatur (kecil = muat kolom).
-pw.Widget _dotChar(String ch, {double dot = 1.1, double gap = 0.35}) {
-  final pola = _dotPola[ch] ?? _dotPola[' ']!;
+pw.Widget _dotGlyph(String ch, double pitch, double r, PdfColor c) {
+  final rows = _gly[ch] ?? _gly[' ']!;
+  final cols = rows[0].length;
   return pw.Column(
     mainAxisSize: pw.MainAxisSize.min,
-    children: List.generate(7, (r) {
-      return pw.Row(
-        mainAxisSize: pw.MainAxisSize.min,
-        children: List.generate(5, (c) {
-          final nyala = pola[r][c] == '#';
-          return pw.Container(
-            width: dot, height: dot, margin: pw.EdgeInsets.all(gap / 2),
-            decoration: pw.BoxDecoration(
-              shape: pw.BoxShape.circle,
-              color: nyala ? PdfColors.black : PdfColors.white,
-            ),
-          );
-        }),
-      );
-    }),
-  );
-}
-
-// Satu angka dot-matrix ADAPTIF: "Rp " kecil + karakter dot, total TIDAK PERNAH melebihi maxW (kolom).
-// Dulu dot = 1.1 TETAP untuk semua panjang angka. Contoh 18`000`000 (10 karakter):
-// 10 x 5 x (1.1 + 0.35) + 9 x 1.2 + 'Rp ' = ±98, kolom Harga cuma 74 -> meluber.
-// Sekarang dot dihitung mundur dari maxW:
-//   dot = (maxW - lebar 'Rp ' - jarak antar karakter) / (jumlah karakter x 5) - gap
-// Makin panjang angkanya, makin kecil titiknya, tapi susunan 5x7 tetap rapi dan tidak meluber.
-// maxDot = batas atas (angka pendek tetap pakai titik normal, tidak membesar).
-pw.Widget _dotAngka(num v, {double maxW = 74, double maxDot = 1.1}) {
-  final teks = formatRupiah(v.toInt()).replaceAll('Rp ', '').trim();
-  const rpW = 15.0; // 'Rp ' font 8 + SizedBox 2
-  const antarChar = 1.2;
-  const gap = 0.35; // harus sama dengan gap default _dotChar
-  final n = teks.isEmpty ? 1 : teks.length;
-  var dot = (maxW - rpW - (n - 1) * antarChar) / (n * 5) - gap;
-  if (dot > maxDot) dot = maxDot;
-  if (dot < 0.45) dot = 0.45; // lantai: di bawah ini titik tidak kebaca lagi
-  return pw.Row(
-    mainAxisSize: pw.MainAxisSize.min,
-    mainAxisAlignment: pw.MainAxisAlignment.end,
     children: [
-      pw.Text('Rp ', style: const pw.TextStyle(fontSize: 8)),
-      pw.SizedBox(width: 2),
-      pw.Row(mainAxisSize: pw.MainAxisSize.min, children: [
-        for (int k = 0; k < teks.length; k++) ...[
-          _dotChar(teks[k], dot: dot),
-          if (k != teks.length - 1) pw.SizedBox(width: antarChar),
-        ],
-      ]),
+      for (final row in rows)
+        pw.Row(
+          mainAxisSize: pw.MainAxisSize.min,
+          children: [
+            for (var k = 0; k < cols; k++)
+              pw.SizedBox(
+                width: pitch,
+                height: pitch,
+                child: row[k] == '1'
+                    ? pw.Center(
+                        child: pw.Container(
+                          width: r * 2,
+                          height: r * 2,
+                          decoration: pw.BoxDecoration(
+                              shape: pw.BoxShape.circle, color: c),
+                        ),
+                      )
+                    : pw.SizedBox(),
+              ),
+          ],
+        ),
     ],
   );
 }
 
-Future<File> buatPDFNota(PoOrder po, Directory dir, {String namaToko = 'BASKORO WINGCHUN'}) async {
-  final h = hitungPO(po);
-  final pdf = pw.Document();
-  final telp = po.customer.nomorWA.trim();
-  final subtotal = po.items.fold<double>(0, (a, i) => a + i.qty * i.hargaSatuan);
-  pdf.addPage(pw.Page(
-    pageFormat: PdfPageFormat.a4,
-    margin: const pw.EdgeInsets.all(28),
-    build: (c) => pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-          pw.Expanded(child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            pw.Text(namaToko, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-            pw.Text('BABE INFO', style: const pw.TextStyle(fontSize: 10)),
-          ])),
-          pw.SizedBox(width: 8),
-          pw.Text('FAKTUR', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-        ]),
-        pw.SizedBox(height: 8),
-        pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-          pw.Text('Nama Pelanggan : ${po.customer.namaOrang}', style: const pw.TextStyle(fontSize: 10)),
-          if (telp.isNotEmpty) pw.Text('No. Telp : $telp', style: const pw.TextStyle(fontSize: 10)),
-          pw.Text('Tanggal : ${formatTanggal(po.tanggal)}', style: const pw.TextStyle(fontSize: 10)),
-          pw.Text('No. Faktur : ${po.id}', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-        ]),
-        pw.SizedBox(height: 8),
-        pw.Table(
-          border: pw.TableBorder.all(width: 0.8),
-          columnWidths: {0: const pw.FixedColumnWidth(26), 1: const pw.FlexColumnWidth(), 2: const pw.FixedColumnWidth(36), 3: const pw.FixedColumnWidth(40), 4: const pw.FixedColumnWidth(80), 5: const pw.FixedColumnWidth(86)},
-          children: [
-            pw.TableRow(children: [
-              for (final t in ['No', 'Nama Barang', 'Qty', 'Satuan', 'Harga', 'Subtotal'])
-                pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4), color: PdfColors.grey200, child: pw.Text(t, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9), textAlign: t == 'Nama Barang' ? pw.TextAlign.left : pw.TextAlign.center)),
-            ]),
-            ...List.generate(po.items.length, (idx) {
-              final i = po.items[idx];
-              final sub = i.qty * i.hargaSatuan - i.diskonItem;
-              return pw.TableRow(children: [
-                pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4), child: pw.Text('${idx + 1}', textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 9))),
-                pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4), child: pw.Text(i.namaBarang, style: const pw.TextStyle(fontSize: 9))),
-                pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4), child: pw.Text(formatHasil(i.qty.toDouble()), textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 9))),
-                pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4), child: pw.Text('', textAlign: pw.TextAlign.center)),
-                pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4), alignment: pw.Alignment.centerRight, child: _dotAngka(i.hargaSatuan, maxW: 74)), // kolom Harga 80 - padding 6
-                pw.Container(padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4), alignment: pw.Alignment.centerRight, child: _dotAngka(sub, maxW: 80)), // kolom Subtotal 86 - padding 6
-              ]);
-            }),
-          ],
-        ),
-        pw.SizedBox(height: 8),
-        pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-          pw.Expanded(child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            pw.Text('Catatan :', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
-            pw.Text(po.catatan.isEmpty ? 'Terima kasih. Telah berkurang, semoga sehat selalu.' : po.catatan, style: const pw.TextStyle(fontSize: 10)),
-            pw.SizedBox(height: 12),
-            pw.Text('Penerima / Pembeli', style: const pw.TextStyle(fontSize: 10)),
-          ])),
-          pw.SizedBox(width: 8),
-          pw.SizedBox(width: 170, child: pw.Column(children: [
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Total', style: const pw.TextStyle(fontSize: 10)), _dotAngka(subtotal, maxW: 95)]),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Diskon', style: const pw.TextStyle(fontSize: 10)), _dotAngka(po.diskonTotal, maxW: 95)]),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Ongkos', style: const pw.TextStyle(fontSize: 10)), _dotAngka(po.ongkir, maxW: 95)]),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Grand Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)), _dotAngka(h.totalAkhir, maxW: 95, maxDot: 1.25)]),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('DP', style: const pw.TextStyle(fontSize: 10)), _dotAngka(po.dp, maxW: 95)]),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Sisa Bayar', style: const pw.TextStyle(fontSize: 10)), _dotAngka(h.sisaBayar, maxW: 95)]),
-          ])),
-        ]),
-        pw.SizedBox(height: 10),
-        pw.Center(child: pw.Text('Terima kasih', style: const pw.TextStyle(fontSize: 10))),
+pw.Widget _dotLine(
+    String teks, double pitch, double r, double gap, PdfColor c) {
+  final list = teks.split('');
+  return pw.Row(
+    mainAxisSize: pw.MainAxisSize.min,
+    children: [
+      for (var i = 0; i < list.length; i++) ...[
+        _dotGlyph(list[i], pitch, r, c),
+        if (i < list.length - 1) pw.SizedBox(width: gap),
       ],
-    ),
-  ));
-  final f = File('${dir.path}/${po.id}.pdf');
-  await f.writeAsBytes(await pdf.save());
-  return f;
+    ],
+  );
 }
 
-Future<void> shareNotaPdf(PoOrder po, {String namaToko = 'BASKORO WINGCHUN'}) async {
-  final dir = await getTemporaryDirectory();
-  final file = await buatPDFNota(po, dir, namaToko: namaToko);
-  if (!await file.exists()) throw Exception('PDF gagal dibuat');
-  await Share.shareXFiles(
-    [XFile(file.path, name: '${po.id}.pdf', mimeType: 'application/pdf')],
-    text: 'FAKTUR ${po.id} - ${po.customer.namaOrang}\nGrand Total: ${formatRupiah(hitungPO(po).totalAkhir.toInt())}',
-    subject: 'FAKTUR ${po.id}',
+pw.Widget _dotAngka(num v, {double maxW = 86, double pitch = 1.45}) {
+  final teks = formatRupiah(v.round()).replaceAll('Rp ', '').trim();
+  const rpW = 18.0;
+  final w = (maxW - rpW).clamp(32.0, maxW);
+  return pw.Row(
+    mainAxisSize: pw.MainAxisSize.min,
+    mainAxisAlignment: pw.MainAxisAlignment.end,
+    children: [
+      pw.Text('Rp ', style: const pw.TextStyle(fontSize: 9)),
+      pw.SizedBox(
+        width: w,
+        child: pw.FittedBox(
+          fit: pw.BoxFit.scaleDown,
+          alignment: pw.Alignment.centerRight,
+          child: _dotLine(teks, pitch, pitch * 0.44, 1.0, PdfColors.black),
+        ),
+      ),
+    ],
   );
+}
+
+Future<Uint8List> buatPDFNota(PoOrder po,
+    {String namaToko = 'BASKORO WINGCHUN'}) async {
+  final doc = pw.Document();
+  final h = hitungPO(po);
+  final telp = po.customer.nomorWA.trim();
+  final subtotal =
+      po.items.fold<double>(0, (a, i) => a + i.qty * i.hargaSatuan);
+  doc.addPage(pw.Page(
+    pageFormat: PdfPageFormat.a4,
+    build: (ctx) =>
+        pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+      pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(namaToko,
+                      style: pw.TextStyle(
+                          fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('BABE INFO', style: const pw.TextStyle(fontSize: 10)),
+                ]),
+            pw.Text('FAKTUR',
+                style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                    letterSpacing: 1)),
+          ]),
+      pw.SizedBox(height: 10),
+      pw.Text('Nama Pelanggan : ${po.customer.namaOrang}',
+          style: const pw.TextStyle(fontSize: 11)),
+      if (telp.isNotEmpty)
+        pw.Text('No. Telp : $telp', style: const pw.TextStyle(fontSize: 11)),
+      pw.Text('Tanggal : ${formatTanggal(po.tanggal)}',
+          style: const pw.TextStyle(fontSize: 11)),
+      pw.Text('No. Faktur : ${po.id}',
+          style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+      pw.SizedBox(height: 10),
+      pw.Table(
+        border: pw.TableBorder.all(width: 0.8),
+        columnWidths: {
+          0: const pw.FixedColumnWidth(26),
+          1: const pw.FlexColumnWidth(),
+          2: const pw.FixedColumnWidth(34),
+          3: const pw.FixedColumnWidth(46),
+          4: const pw.FixedColumnWidth(78),
+          5: const pw.FixedColumnWidth(84),
+        },
+        children: [
+          pw.TableRow(children: [
+            for (final t in [
+              'No',
+              'Nama Barang',
+              'Qty',
+              'Satuan',
+              'Harga',
+              'Subtotal'
+            ])
+              pw.Container(
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                color: PdfColors.grey200,
+                child: pw.Text(
+                  t,
+                  style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold, fontSize: 9),
+                  textAlign: t == 'Nama Barang'
+                      ? pw.TextAlign.left
+                      : pw.TextAlign.center,
+                ),
+              ),
+          ]),
+          ...List.generate(po.items.length, (idx) {
+            final i = po.items[idx];
+            final sub = i.qty * i.hargaSatuan - i.diskonItem;
+            return pw.TableRow(children: [
+              pw.Container(
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: pw.Text('${idx + 1}',
+                    textAlign: pw.TextAlign.center,
+                    style: const pw.TextStyle(fontSize: 9)),
+              ),
+              pw.Container(
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: pw.Text(i.namaBarang,
+                    style: const pw.TextStyle(fontSize: 9)),
+              ),
+              pw.Container(
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: pw.Text(formatHasil(i.qty.toDouble()),
+                    textAlign: pw.TextAlign.center,
+                    style: const pw.TextStyle(fontSize: 9)),
+              ),
+              pw.Container(
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: pw.Text(i.satuan,
+                    textAlign: pw.TextAlign.center,
+                    style: const pw.TextStyle(fontSize: 9)),
+              ),
+              pw.Container(
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+                alignment: pw.Alignment.centerRight,
+                child: _dotAngka(i.hargaSatuan, maxW: 72),
+              ),
+              pw.Container(
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+                alignment: pw.Alignment.centerRight,
+                child: _dotAngka(sub, maxW: 78),
+              ),
+            ]);
+          }),
+        ],
+      ),
+      pw.SizedBox(height: 10),
+      pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Expanded(
+          child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Catatan :',
+                    style: pw.TextStyle(
+                        fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                pw.Text(po.catatan.isEmpty ? '-' : po.catatan,
+                    style: const pw.TextStyle(fontSize: 11)),
+              ]),
+        ),
+        pw.SizedBox(width: 12),
+        pw.SizedBox(
+          width: 210,
+          child: pw.Column(children: [
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Sub Total', style: const pw.TextStyle(fontSize: 11)),
+                  _dotAngka(subtotal, maxW: 110),
+                ]),
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Diskon', style: const pw.TextStyle(fontSize: 11)),
+                  _dotAngka(po.diskonTotal, maxW: 110),
+                ]),
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Biaya Kirim',
+                      style: const pw.TextStyle(fontSize: 11)),
+                  _dotAngka(po.ongkir, maxW: 110),
+                ]),
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Total',
+                      style: pw.TextStyle(
+                          fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                  _dotAngka(h.totalAkhir, maxW: 110),
+                ]),
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('DP', style: const pw.TextStyle(fontSize: 11)),
+                  _dotAngka(po.dp, maxW: 110),
+                ]),
+            pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Sisa Bayar',
+                      style: const pw.TextStyle(fontSize: 11)),
+                  _dotAngka(h.sisaBayar, maxW: 110),
+                ]),
+          ]),
+        ),
+      ]),
+      pw.SizedBox(height: 18),
+      pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+          children: [
+            pw.Column(children: [
+              pw.Text('Penerima,', style: const pw.TextStyle(fontSize: 11)),
+              pw.SizedBox(height: 36),
+              pw.Text('( ..................... )',
+                  style: const pw.TextStyle(fontSize: 11)),
+            ]),
+            pw.Column(children: [
+              pw.Text('Hormat Kami,', style: const pw.TextStyle(fontSize: 11)),
+              pw.SizedBox(height: 36),
+              pw.Text('( $namaToko )',
+                  style: const pw.TextStyle(fontSize: 11)),
+            ]),
+          ]),
+    ]),
+  ));
+  return doc.save();
+}
+
+Future<void> shareNotaPdf(PoOrder po,
+    {String namaToko = 'BASKORO WINGCHUN'}) async {
+  final bytes = await buatPDFNota(po, namaToko: namaToko);
+  await Printing.sharePdf(bytes: bytes, filename: 'nota_${po.id}.pdf');
 }
