@@ -5,7 +5,7 @@ import 'package:sqflite/sqflite.dart';
 
 class PoDatabase {
   static const _namaFile = 'po_kalkulator.sqlite';
-  static const _versi = 7;
+  static const _versi = 8;
 
   Future<Database>? _dbFuture;
 
@@ -67,7 +67,9 @@ class PoDatabase {
         await db.execute(
           'CREATE TABLE pelanggan('
           'id INTEGER PRIMARY KEY AUTOINCREMENT, '
+          'id_orang TEXT NOT NULL DEFAULT \'\', '
           'nama TEXT NOT NULL, '
+          'nomor_wa TEXT NOT NULL DEFAULT \'\', '
           'terakhir_dipakai INTEGER NOT NULL)',
         );
         await db.execute(
@@ -248,6 +250,16 @@ class PoDatabase {
             'urutan INTEGER NOT NULL)',
           );
         }
+        if (oldVersion < 8) {
+          try {
+            await db.execute(
+                "ALTER TABLE pelanggan ADD COLUMN id_orang TEXT NOT NULL DEFAULT ''");
+          } catch (_) {}
+          try {
+            await db.execute(
+                "ALTER TABLE pelanggan ADD COLUMN nomor_wa TEXT NOT NULL DEFAULT ''");
+          } catch (_) {}
+        }
       },
     );
   }
@@ -264,27 +276,27 @@ class PoDatabase {
         orderBy: 'urutan ASC',
       );
       hasil.add({
-        "id": r['id'],
-        "nomor": r['nomor'],
-        "tanggal": r['tanggal'],
-        "pelanggan": r['pelanggan'] ?? '',
-        "total": (r['total'] as num).toDouble(),
-        "nomorWA": r['nomor_wa'] ?? '',
-        "dicek": (r['dicek'] as num?)?.toInt() ?? 0,
-        "items": items
+        'id': r['id'],
+        'nomor': r['nomor'],
+        'tanggal': r['tanggal'],
+        'pelanggan': r['pelanggan'] ?? '',
+        'total': (r['total'] as num).toDouble(),
+        'nomorWA': r['nomor_wa'] ?? '',
+        'dicek': (r['dicek'] as num?)?.toInt() ?? 0,
+        'items': items
             .map((e) => {
-                  "item": e['item'],
-                  "rumus": e['rumus'],
-                  "namaBarang": e['nama_barang'] ?? '',
-                  "hargaAcuan": (e['harga_acuan'] as num?)?.toDouble() ??
+                  'item': e['item'],
+                  'rumus': e['rumus'],
+                  'namaBarang': e['nama_barang'] ?? '',
+                  'hargaAcuan': (e['harga_acuan'] as num?)?.toDouble() ??
                       (e['harga'] as num?)?.toDouble() ??
                       0,
-                  "satuanAngka": (e['satuan_angka'] as num?)?.toDouble() ?? 1,
-                  "opSatuan": e['op_satuan'] ?? 'x',
-                  "harga": (e['harga'] as num).toDouble(),
-                  "qty": (e['qty'] as num).toDouble(),
-                  "jumlah": (e['jumlah'] as num).toDouble(),
-                  "satuan": e['satuan'] ?? '',
+                  'satuanAngka': (e['satuan_angka'] as num?)?.toDouble() ?? 1,
+                  'opSatuan': e['op_satuan'] ?? 'x',
+                  'harga': (e['harga'] as num).toDouble(),
+                  'qty': (e['qty'] as num).toDouble(),
+                  'jumlah': (e['jumlah'] as num).toDouble(),
+                  'satuan': e['satuan'] ?? '',
                 })
             .toList(),
       });
@@ -357,18 +369,18 @@ class PoDatabase {
       final e = items[k];
       batch.insert('po_item_tersimpan', {
         'po_id': poId,
-        'item': "${e["item"]}",
-        'rumus': "${e["rumus"] ?? ""}",
-        'nama_barang': "${e["namaBarang"] ?? ""}",
-        'harga_acuan': (e["hargaAcuan"] as num?)?.toDouble() ??
-            (e["harga"] as num?)?.toDouble() ??
+        'item': '${e['item']}',
+        'rumus': '${e['rumus'] ?? ''}',
+        'nama_barang': '${e['namaBarang'] ?? ''}',
+        'harga_acuan': (e['hargaAcuan'] as num?)?.toDouble() ??
+            (e['harga'] as num?)?.toDouble() ??
             0,
-        'satuan_angka': (e["satuanAngka"] as num?)?.toDouble() ?? 1,
-        'op_satuan': "${e["opSatuan"] ?? "x"}",
-        'harga': (e["harga"] as num?)?.toDouble() ?? 0,
-        'qty': (e["qty"] as num?)?.toDouble() ?? 0,
-        'jumlah': (e["jumlah"] as num?)?.toDouble() ?? 0,
-        'satuan': "${e["satuan"] ?? ''}",
+        'satuan_angka': (e['satuanAngka'] as num?)?.toDouble() ?? 1,
+        'op_satuan': '${e['opSatuan'] ?? 'x'}',
+        'harga': (e['harga'] as num?)?.toDouble() ?? 0,
+        'qty': (e['qty'] as num?)?.toDouble() ?? 0,
+        'jumlah': (e['jumlah'] as num?)?.toDouble() ?? 0,
+        'satuan': '${e['satuan'] ?? ''}',
         'urutan': k,
       });
     }
@@ -410,20 +422,20 @@ class PoDatabase {
       final dt =
           DateTime.fromMillisecondsSinceEpoch((r['dibuat_pada'] as num).toInt());
       return {
-        "id": r['id'],
-        "item": r['item'],
-        "rumus": r['rumus'],
-        "namaBarang": r['nama_barang'] ?? '',
-        "hargaAcuan": (r['harga_acuan'] as num?)?.toDouble() ??
+        'id': r['id'],
+        'item': r['item'],
+        'rumus': r['rumus'],
+        'namaBarang': r['nama_barang'] ?? '',
+        'hargaAcuan': (r['harga_acuan'] as num?)?.toDouble() ??
             (r['harga'] as num?)?.toDouble() ??
             0,
-        "satuanAngka": (r['satuan_angka'] as num?)?.toDouble() ?? 1,
-        "opSatuan": r['op_satuan'] ?? 'x',
-        "harga": (r['harga'] as num).toDouble(),
-        "qty": (r['qty'] as num).toDouble(),
-        "jumlah": (r['jumlah'] as num).toDouble(),
-        "satuan": r['satuan'] ?? '',
-        "tanggal":
+        'satuanAngka': (r['satuan_angka'] as num?)?.toDouble() ?? 1,
+        'opSatuan': r['op_satuan'] ?? 'x',
+        'harga': (r['harga'] as num).toDouble(),
+        'qty': (r['qty'] as num).toDouble(),
+        'jumlah': (r['jumlah'] as num).toDouble(),
+        'satuan': r['satuan'] ?? '',
+        'tanggal':
             "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} ${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}",
       };
     }).toList();
@@ -458,6 +470,97 @@ class PoDatabase {
     } else {
       await db.update('pelanggan', {'terakhir_dipakai': skrg},
           where: 'id = ?', whereArgs: [ada.first['id']]);
+    }
+  }
+
+  Future<List>> muatDataPelanggan() async {
+    final db = await _database;
+    final rows =
+        await db.query('pelanggan', orderBy: 'terakhir_dipakai DESC', limit: 200);
+    return rows
+        .map((r) {
+          final nama = '${r['nama'] ?? ''}'.trim();
+          final rawId = '${r['id_orang'] ?? ''}'.trim();
+          final id = rawId.isNotEmpty
+              ? rawId
+              : (r['id'] != null ? 'db_${r['id']}' : nama);
+          return {
+            'id': id,
+            'namaOrang': nama,
+            'nomorWA': '${r['nomor_wa'] ?? ''}'.trim(),
+          };
+        })
+        .where((m) => m['namaOrang']!.isNotEmpty)
+        .toList();
+  }
+
+  Future<void> simpanDataPelanggan({
+    required String id,
+    required String namaOrang,
+    String nomorWA = '',
+  }) async {
+    final nama = namaOrang.trim();
+    if (nama.isEmpty) return;
+    final db = await _database;
+    final skrg = DateTime.now().millisecondsSinceEpoch;
+    final adaById = id.trim().isNotEmpty
+        ? await db
+            .query('pelanggan', where: 'id_orang = ?', whereArgs: [id.trim()])
+        : >[];
+    if (adaById.isNotEmpty) {
+      await db.update(
+        'pelanggan',
+        {
+          'nama': nama,
+          'nomor_wa': nomorWA.trim(),
+          'terakhir_dipakai': skrg,
+        },
+        where: 'id = ?',
+        whereArgs: [adaById.first['id']],
+      );
+      return;
+    }
+    final adaByNama = await db.query('pelanggan',
+        where: 'LOWER(nama) = ?', whereArgs: [nama.toLowerCase()]);
+    if (adaByNama.isEmpty) {
+      await db.insert('pelanggan', {
+        'id_orang': id.trim(),
+        'nama': nama,
+        'nomor_wa': nomorWA.trim(),
+        'terakhir_dipakai': skrg,
+      });
+    } else {
+      await db.update(
+        'pelanggan',
+        {
+          'id_orang': id.trim().isNotEmpty
+              ? id.trim()
+              : '${adaByNama.first['id_orang'] ?? ''}',
+          'nama': nama,
+          'nomor_wa': nomorWA.trim(),
+          'terakhir_dipakai': skrg,
+        },
+        where: 'id = ?',
+        whereArgs: [adaByNama.first['id']],
+      );
+    }
+  }
+
+  Future<void> hapusDataPelanggan({
+    required String id,
+    required String namaOrang,
+  }) async {
+    final db = await _database;
+    if (id.trim().isNotEmpty) {
+      await db
+          .delete('pelanggan', where: 'id_orang = ?', whereArgs: [id.trim()]);
+    }
+    if (namaOrang.trim().isNotEmpty) {
+      await db.delete(
+        'pelanggan',
+        where: 'LOWER(nama) = ?',
+        whereArgs: [namaOrang.trim().toLowerCase()],
+      );
     }
   }
 
@@ -528,15 +631,15 @@ class PoDatabase {
       }
 
       return {
-        "kode": "${r['kode'] ?? ''}",
-        "nama": "${r['nama'] ?? ''}",
-        "kategori": "${r['kategori'] ?? ''}",
-        "harga1": h1,
-        "hargaList": hargaList,
-        "satuan": "${r['satuan'] ?? 'sak'}",
-        "varian": "${r['varian'] ?? ''}",
-        "satuanList": satuanList,
-        "satuanPerVarian": satuanPerVarian,
+        'kode': '${r['kode'] ?? ''}',
+        'nama': '${r['nama'] ?? ''}',
+        'kategori': '${r['kategori'] ?? ''}',
+        'harga1': h1,
+        'hargaList': hargaList,
+        'satuan': '${r['satuan'] ?? 'sak'}',
+        'varian': '${r['varian'] ?? ''}',
+        'satuanList': satuanList,
+        'satuanPerVarian': satuanPerVarian,
       };
     }).toList();
   }
@@ -552,12 +655,12 @@ class PoDatabase {
         'satuanPerVarian': it['satuanPerVarian'] ?? [],
       });
       batch.insert('barang', {
-        'kode': "${it["kode"] ?? ''}",
-        'nama': "${it["nama"] ?? ''}",
-        'kategori': "${it["kategori"] ?? ''}",
-        'harga1': "${it["harga1"] ?? ''}",
-        'satuan': "${it["satuan"] ?? 'sak'}",
-        'varian': "${it["varian"] ?? ''}",
+        'kode': '${it['kode'] ?? ''}',
+        'nama': '${it['nama'] ?? ''}',
+        'kategori': '${it['kategori'] ?? ''}',
+        'harga1': '${it['harga1'] ?? ''}',
+        'satuan': '${it['satuan'] ?? 'sak'}',
+        'varian': '${it['varian'] ?? ''}',
         'satuan_list': payload,
       });
     }
@@ -585,20 +688,20 @@ class PoDatabase {
       final satStr = "${r['satuan'] ?? ''}";
       final bersihSat = satStr.startsWith('{') ? '' : satStr;
       return {
-        "item": "${r['item'] ?? ''}",
-        "rumus": "${r['rumus'] ?? ''}",
-        "namaBarang": "${r['nama_barang'] ?? ''}",
-        "hargaAcuan": (r['harga_acuan'] as num?)?.toDouble() ??
+        'item': '${r['item'] ?? ''}',
+        'rumus': '${r['rumus'] ?? ''}',
+        'namaBarang': '${r['nama_barang'] ?? ''}',
+        'hargaAcuan': (r['harga_acuan'] as num?)?.toDouble() ??
             (r['harga'] as num?)?.toDouble() ??
             0,
-        "satuanAngka": (r['satuan_angka'] as num?)?.toDouble() ?? 1,
-        "opSatuan": r['op_satuan'] ?? 'x',
-        "harga": (r['harga'] as num).toDouble(),
-        "qty": (r['qty'] as num).toDouble(),
-        "jumlah": (r['jumlah'] as num).toDouble(),
-        "satuan": bersihSat,
-        "chain": chain,
-        "opPecah": opPecah,
+        'satuanAngka': (r['satuan_angka'] as num?)?.toDouble() ?? 1,
+        'opSatuan': r['op_satuan'] ?? 'x',
+        'harga': (r['harga'] as num).toDouble(),
+        'qty': (r['qty'] as num).toDouble(),
+        'jumlah': (r['jumlah'] as num).toDouble(),
+        'satuan': bersihSat,
+        'chain': chain,
+        'opPecah': opPecah,
       };
     }).toList();
   }
@@ -618,19 +721,19 @@ class PoDatabase {
               'chain': it['chain'] ?? [],
               'opPecah': it['opPecah'] ?? 'x',
             })
-          : "${it["satuan"] ?? ''}";
+          : '${it['satuan'] ?? ''}';
       batch.insert('step_draf', {
-        'item': "${it["item"] ?? ''}",
-        'rumus': "${it["rumus"] ?? ''}",
-        'nama_barang': "${it["namaBarang"] ?? ''}",
-        'harga_acuan': (it["hargaAcuan"] as num?)?.toDouble() ??
-            (it["harga"] as num?)?.toDouble() ??
+        'item': '${it['item'] ?? ''}',
+        'rumus': '${it['rumus'] ?? ''}',
+        'nama_barang': '${it['namaBarang'] ?? ''}',
+        'harga_acuan': (it['hargaAcuan'] as num?)?.toDouble() ??
+            (it['harga'] as num?)?.toDouble() ??
             0,
-        'satuan_angka': (it["satuanAngka"] as num?)?.toDouble() ?? 1,
-        'op_satuan': "${it["opSatuan"] ?? 'x'}",
-        'harga': (it["harga"] as num?)?.toDouble() ?? 0,
-        'qty': (it["qty"] as num?)?.toDouble() ?? 0,
-        'jumlah': (it["jumlah"] as num?)?.toDouble() ?? 0,
+        'satuan_angka': (it['satuanAngka'] as num?)?.toDouble() ?? 1,
+        'op_satuan': '${it['opSatuan'] ?? 'x'}',
+        'harga': (it['harga'] as num?)?.toDouble() ?? 0,
+        'qty': (it['qty'] as num?)?.toDouble() ?? 0,
+        'jumlah': (it['jumlah'] as num?)?.toDouble() ?? 0,
         'satuan': satField,
         'urutan': urutan++,
       });
