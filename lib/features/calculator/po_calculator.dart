@@ -6,9 +6,12 @@ class HasilHitung {
 }
 
 HasilHitung hitungPO(PoOrder po) {
-  final subtotal = po.items.fold<int>(0, (a, i) => a + (i.qty * i.hargaSatuan - i.diskonItem));
+  final subtotal = po.items.fold<int>(
+    0,
+    (a, i) => a + (i.qty * i.hargaSatuan - i.diskonItem),
+  );
   final totalSetelahDiskon = subtotal - po.diskonTotal;
   var totalAkhir = totalSetelahDiskon + po.ongkir;
-  totalAkhir = ((totalAkhir + 250) ~/ 500) * 500; // bulatkan ke 500 terdekat
+  totalAkhir = ((totalAkhir + 250) ~/ 500) * 500;
   return HasilHitung(subtotal, totalAkhir, totalAkhir - po.dp);
 }
