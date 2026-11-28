@@ -5,12 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/formatter.dart';
 import '../../core/po_database.dart';
 import '../../widgets/kartu_po.dart';
+import '../calculator/po_calculator.dart';
 import '../customer/customer_provider.dart';
 import '../customer/daftar_orang_page.dart';
 import '../nota/nota_pdf.dart';
 import '../nota/nota_preview.dart';
-import '../po/po_models.dart';
 import 'parse_cepat.dart';
+import 'po_models.dart';
 import 'po_provider.dart';
 
 class SatuanItem {
@@ -37,13 +38,13 @@ class SatuanItem {
   bool nominalManual = false;
   Map<String, dynamic> toMap() {
     return {
-      "satuan": namaCtrl.text,
-      "satuanBaru": satuanBaruCtrl.text,
-      "dasar": dasar,
-      "qty": qtyCtrl.text,
-      "isi": isiCtrl.text,
-      "op": op,
-      "nominal": nominalCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
+      'satuan': namaCtrl.text,
+      'satuanBaru': satuanBaruCtrl.text,
+      'dasar': dasar,
+      'qty': qtyCtrl.text,
+      'isi': isiCtrl.text,
+      'op': op,
+      'nominal': nominalCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
     };
   }
 
@@ -59,7 +60,7 @@ class SatuanItem {
 class _AutoField extends StatefulWidget {
   const _AutoField({
     required this.controller,
-    this.hint = "",
+    this.hint = '',
     this.angka = false,
     this.onChanged,
     this.onTap,
@@ -309,15 +310,15 @@ class _S extends ConsumerState<HomeDaftarPO> {
     } catch (_) {}
   }
 
-  String layar = "0";
-  String ekspresi = "";
+  String layar = '0';
+  String ekspresi = '';
   double akumulator = 0;
-  String opPending = "";
-  String op = "";
+  String opPending = '';
+  String op = '';
   double angka1 = 0;
   bool entryBaru = true;
   bool adaError = false;
-  String lastOp = "";
+  String lastOp = '';
   double lastAngka2 = 0;
   double qtyHitung = 1;
   bool adaQtyHitung = false;
@@ -326,7 +327,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   double memori = 0;
 
   double? _hargaAcuanVarian;
-  String _labelSaranVarian = "";
+  String _labelSaranVarian = '';
   bool _hargaLayarDiubah = false;
 
   double tarifPajak = 11;
@@ -334,10 +335,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
   double laciSell = 0;
   double laciMargin = 0;
   bool modeAdd2 = false;
-  String modeRound = "5/4";
+  String modeRound = '5/4';
   List<String> antreanKetikan = [];
   bool tekanTombol = false;
-  String tombolDitekan = "";
+  String tombolDitekan = '';
   Map<String, String>? barangDipilih;
   bool poTerbuka = false;
 
@@ -558,7 +559,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
         nomorWA: nomorWA,
       ),
       items: items,
-      status: sudahDicek ? PoStatus.values.last : PoStatus.values.first,
+      status: sudahDicek ? PoStatus.dikonfirmasi : PoStatus.draft,
     );
   }
 
@@ -1534,9 +1535,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
 
   void _tulisUlangPO(List> items) {
     final notif = ref.read(poProvider.notifier);
-    while (ref.read(poProvider).items.isNotEmpty) {
-      notif.hapusItem(0);
-    }
+    notif.bersihkan();
     if (items.isEmpty) {
       _bersihkanSemuaStatePecah('po');
       _poChain.clear();
@@ -1747,6 +1746,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
             );
       } catch (_) {}
     }
+    if (!mounted) return;
     setState(() {
       if (_poRevisi) {
         final idx =
@@ -2184,7 +2184,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                     barangDipilih!['kode'] == b['kode']) {
                                   barangDipilih = null;
                                   _hargaAcuanVarian = null;
-                                  _labelSaranVarian = "";
+                                  _labelSaranVarian = '';
                                   _hargaLayarDiubah = false;
                                 }
                               });
@@ -2262,8 +2262,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                     _hargaLayarDiubah = false;
                                     _qtyMPlus = null;
                                     adaQtyHitung = false;
-                                    opPending = "";
-                                    op = "";
+                                    opPending = '';
+                                    op = '';
                                     ekspresi =
                                         "Saran ${b['nama']} ($satVar)";
                                     layar = _groupBacktick(
@@ -2469,7 +2469,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
             onPressed: () async {
               final d = await Clipboard.getData(Clipboard.kTextPlain);
               final t = d?.text ?? '';
-              if (t.isNotEmpty) setState(() => _cpsTempelC.text = t);
+              if (t.isNotEmpty && mounted) setState(() => _cpsTempelC.text = t);
             },
           ),
         ),
@@ -3095,7 +3095,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
       ongkir: 0,
       dp: 0,
       catatan: '',
-      status: PoStatus.values.first,
+      status: PoStatus.draft,
     );
   }
 
@@ -3674,11 +3674,11 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
 
   final List> daftarBarang = [];
-  String queryLS = "";
+  String queryLS = '';
   final kodeCtrl = TextEditingController();
   final namaCtrl = TextEditingController();
-  String kategoriPilih = "";
-  final List<String> listKategori = ["Semen", "Besi", "Cat", "Keramik", "Pipa"];
+  String kategoriPilih = '';
+  final List<String> listKategori = ['Semen', 'Besi', 'Cat', 'Keramik', 'Pipa'];
   final kategoriBaruCtrl = TextEditingController();
   final unitCtrl = TextEditingController();
   final harga1Ctrl = TextEditingController();
@@ -3687,28 +3687,28 @@ class _S extends ConsumerState<HomeDaftarPO> {
   List<List<SatuanItem>> satuanPerVarian = [
     [
       SatuanItem(
-          satuan: "",
+          satuan: '',
           dasar: true,
-          qty: "",
-          isi: "",
-          op: "x",
-          nominal: "",
-          satuanBaru: "")
+          qty: '',
+          isi: '',
+          op: 'x',
+          nominal: '',
+          satuanBaru: '')
     ]
   ];
   List<SatuanItem> _satuanBaruKosong() => [
         SatuanItem(
-            satuan: "",
+            satuan: '',
             dasar: true,
-            qty: "",
-            isi: "",
-            op: "x",
-            nominal: "",
-            satuanBaru: "")
+            qty: '',
+            isi: '',
+            op: 'x',
+            nominal: '',
+            satuanBaru: '')
       ];
   List> _satuanGabunganMap() =>
       satuanPerVarian.expand((g) => g.map((x) => x.toMap())).toList();
-  final Set<String> daftarSatuan = {"sak", "kg", "kilo", "m", "pcs"};
+  final Set<String> daftarSatuan = {'sak', 'kg', 'kilo', 'm', 'pcs'};
 
   void tambahKeDaftarSatuan(String nama) {
     final v = nama.trim().toLowerCase();
@@ -3728,15 +3728,15 @@ class _S extends ConsumerState<HomeDaftarPO> {
 
   List<SatuanItem> satuanList = [
     SatuanItem(
-        satuan: "",
+        satuan: '',
         dasar: true,
-        qty: "",
-        isi: "",
-        op: "x",
-        nominal: "",
-        satuanBaru: ""),
+        qty: '',
+        isi: '',
+        op: 'x',
+        nominal: '',
+        satuanBaru: ''),
   ];
-  String modeHitung = "PEMBULATAN";
+  String modeHitung = 'PEMBULATAN';
   int desimal = 0;
   final List> steps = [];
 
@@ -3776,16 +3776,16 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
 
   String teksAcuan() {
-    if (hargaAcuan == 0) return "---";
+    if (hargaAcuan == 0) return '---';
     final dasar = formatRupiah(hargaAcuan.round());
     if (_labelSaranVarian.isNotEmpty) {
-      return "Saran: $dasar ($_labelSaranVarian)";
+      return 'Saran: $dasar ($_labelSaranVarian)';
     }
-    return "Saran: $dasar";
+    return 'Saran: $dasar';
   }
 
   String teksSaran() {
-    if (hargaAcuan == 0) return "---";
+    if (hargaAcuan == 0) return '---';
     return "${persen >= 0 ? '+' : ''}${persen.toStringAsFixed(1)}%";
   }
 
@@ -3799,7 +3799,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   double _parseLayar() => double.tryParse(_stripBacktick(layar)) ?? 0;
 
   String _groupBacktick(String s) {
-    if (s == "E" || s.isEmpty) return s;
+    if (s == 'E' || s.isEmpty) return s;
     var neg = false;
     if (s.startsWith('-')) {
       neg = true;
@@ -3807,7 +3807,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     }
     var dotParts = s.split('.');
     var integer = dotParts[0].replaceAll(RegExp(r'[^0-9]'), '');
-    if (integer.isEmpty) integer = "0";
+    if (integer.isEmpty) integer = '0';
     var rev = integer.split('').reversed.toList();
     var grouped = <String>[];
     for (var i = 0; i < rev.length; i++) {
@@ -3816,9 +3816,9 @@ class _S extends ConsumerState<HomeDaftarPO> {
     }
     var hasil = grouped.reversed.join('');
     if (dotParts.length > 1 && dotParts[1].isNotEmpty) {
-      hasil = "$hasil.${dotParts[1]}";
+      hasil = '$hasil.${dotParts[1]}';
     }
-    return neg ? "-$hasil" : hasil;
+    return neg ? '-$hasil' : hasil;
   }
 
   String _layarAtasCasio() {
@@ -3844,17 +3844,17 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
 
   String formatHasil(double v) {
-    if (v.isNaN || v.isInfinite) return "E";
+    if (v.isNaN || v.isInfinite) return 'E';
     String mentah;
-    if (modeHitung == "ORIGINAL") {
+    if (modeHitung == 'ORIGINAL') {
       mentah = v.toStringAsFixed(desimal);
-    } else if (modeRound == "CUT") {
+    } else if (modeRound == 'CUT') {
       final p = desimal == 0 ? 1.0 : _pow10(desimal);
       final potong = (v * p).truncate() / p;
       mentah = desimal == 0
           ? potong.round().toString()
           : potong.toStringAsFixed(desimal);
-    } else if (modeRound == "F") {
+    } else if (modeRound == 'F') {
       mentah = _buangNolBelakang(v.toStringAsFixed(6));
     } else if (desimal == 0) {
       mentah = v.round().toString();
@@ -3878,14 +3878,14 @@ class _S extends ConsumerState<HomeDaftarPO> {
       s = s.substring(0, s.length - 1);
     }
     if (s.endsWith('.')) s = s.substring(0, s.length - 1);
-    return s.isEmpty ? "0" : s;
+    return s.isEmpty ? '0' : s;
   }
 
   double? hitungDasar(double a, String o, double b) {
-    if (o == "+") return a + b;
-    if (o == "-") return a - b;
-    if (o == "x") return a * b;
-    if (o == "÷" || o == "/") {
+    if (o == '+') return a + b;
+    if (o == '-') return a - b;
+    if (o == 'x') return a * b;
+    if (o == '÷' || o == '/') {
       if (b == 0) return null;
       return a / b;
     }
@@ -3900,7 +3900,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
         0;
     final harga = hargaForm > 0 ? hargaForm : hargaAcuan;
     if (s.dasar) return harga * qty;
-    if (s.op == "÷") {
+    if (s.op == '÷') {
       if (isi == 0) return 0;
       return qty * (harga / isi);
     }
@@ -3922,52 +3922,52 @@ class _S extends ConsumerState<HomeDaftarPO> {
   }
 
   String teksRumusSatuan(SatuanItem s, {String? hargaTeks}) {
-    final qty = s.qtyCtrl.text.isEmpty ? "1" : s.qtyCtrl.text;
-    final isi = s.isiCtrl.text.isEmpty ? "1" : s.isiCtrl.text;
+    final qty = s.qtyCtrl.text.isEmpty ? '1' : s.qtyCtrl.text;
+    final isi = s.isiCtrl.text.isEmpty ? '1' : s.isiCtrl.text;
     final satuanBiru = s.namaCtrl.text;
     final unitHijau =
         s.satuanBaruCtrl.text.isEmpty ? satuanBiru : s.satuanBaruCtrl.text;
     final infoHasil = hitungNominal(s, hargaTeks: hargaTeks);
     if (s.dasar) {
-      return "$qty $satuanBiru = ${formatRupiah(infoHasil.round())}  (info)";
+      return '$qty $satuanBiru = ${formatRupiah(infoHasil.round())}  (info)';
     }
-    return "$qty $satuanBiru ${s.op} $isi $unitHijau = ${formatRupiah(infoHasil.round())}  (info)";
+    return '$qty $satuanBiru ${s.op} $isi $unitHijau = ${formatRupiah(infoHasil.round())}  (info)';
   }
 
   void dialogBabe() {
     final namaBarang = barangDipilih == null
-        ? "Belum pilih barang (pencet LS)"
+        ? 'Belum pilih barang (pencet LS)'
         : "${barangDipilih!["nama"]}";
     final acuan = hargaAcuan;
     final nilaiManual = hargaAktifKalkulator;
     final warna = warnaSaran();
     final namaWarna = warna == Colors.black
-        ? "HITAM - belum ada acuan"
+        ? 'HITAM - belum ada acuan'
         : warna == const Color(0xFFB71C1C)
-            ? "MERAH TUA - rugi besar"
+            ? 'MERAH TUA - rugi besar'
             : warna == Colors.red
-                ? "MERAH - rugi"
+                ? 'MERAH - rugi'
                 : warna == const Color(0xFFB58900)
-                    ? "KUNING - waspada"
+                    ? 'KUNING - waspada'
                     : warna == Colors.blue
-                        ? "BIRU - untung kecil"
-                        : "HIJAU - untung";
+                        ? 'BIRU - untung kecil'
+                        : 'HIJAU - untung';
     final bep = acuan > 0 ? acuan * 1.1 : 0.0;
     final totalStep = steps.fold<double>(
-        0, (a, x) => a + ((x["jumlah"] as num?)?.toDouble() ?? 0));
+        0, (a, x) => a + ((x['jumlah'] as num?)?.toDouble() ?? 0));
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("BABE•INFO - Dialog Uni"),
+        title: const Text('BABE•INFO - Dialog Uni'),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text("Barang: $namaBarang",
+              Text('Barang: $namaBarang',
                   style: const TextStyle(
                       fontSize: 13, fontWeight: FontWeight.bold)),
-              Text("Unit Biru (auto sama): ${unitCtrl.text}",
+              Text('Unit Biru (auto sama): ${unitCtrl.text}',
                   style: const TextStyle(fontSize: 11)),
               const Divider(),
               Text(
@@ -3975,11 +3975,11 @@ class _S extends ConsumerState<HomeDaftarPO> {
                 style: TextStyle(fontSize: 11, color: warna),
               ),
               Text(
-                "Warna: $namaWarna | BEP: ${bep == 0 ? "---" : formatRupiah(bep.round())} | Memori: ${formatRupiah(memori.round())}",
+                'Warna: $namaWarna | BEP: ${bep == 0 ? '---' : formatRupiah(bep.round())} | Memori: ${formatRupiah(memori.round())}',
                 style: const TextStyle(fontSize: 11),
               ),
               const Divider(),
-              const Text("SATUAN - Biru = dasar, Hijau = satuan baru",
+              const Text('SATUAN - Biru = dasar, Hijau = satuan baru',
                   style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
@@ -3987,7 +3987,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
               for (var gi = 0; gi < satuanPerVarian.length; gi++) ...[
                 if (satuanPerVarian.length > 1)
                   Text(
-                    "Varian ${gi + 1} • Harga ${gi + 1} = ${formatRupiah(double.tryParse(hargaCtrls[gi].text.replaceAll(RegExp(r'[^0-9]'), ''))?.round() ?? 0)}",
+                    'Varian ${gi + 1} • Harga ${gi + 1} = ${formatRupiah(double.tryParse(hargaCtrls[gi].text.replaceAll(RegExp(r'[^0-9]'), ''))?.round() ?? 0)}',
                     style: const TextStyle(
                         fontSize: 11, fontWeight: FontWeight.bold),
                   ),
@@ -4001,19 +4001,19 @@ class _S extends ConsumerState<HomeDaftarPO> {
                   ),
               ],
               const Divider(),
-              const Text("CEK - STEP (riwayat hitung Casio)",
+              const Text('CEK - STEP (riwayat hitung Casio)',
                   style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                       color: Colors.grey)),
               if (steps.isEmpty)
-                const Text("Belum ada step.", style: TextStyle(fontSize: 11)),
+                const Text('Belum ada step.', style: TextStyle(fontSize: 11)),
               ...steps.asMap().entries.map((e) => Text(
                     "${e.key + 1}. ${e.value["rumus"] ?? e.value["item"]}",
                     style: const TextStyle(fontSize: 11),
                   )),
               if (steps.isNotEmpty)
-                Text("Total step: ${formatRupiah(totalStep.round())}",
+                Text('Total step: ${formatRupiah(totalStep.round())}',
                     style: const TextStyle(
                         fontSize: 11, fontWeight: FontWeight.bold)),
             ],
@@ -4021,7 +4021,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text("Tutup"))
+              onPressed: () => Navigator.pop(ctx), child: const Text('Tutup'))
         ],
       ),
     );
@@ -4039,23 +4039,23 @@ class _S extends ConsumerState<HomeDaftarPO> {
     _habisMPlus = false;
     _hargaLayarDiubah = true;
     if (adaError) {
-      layar = "0";
-      ekspresi = "";
+      layar = '0';
+      ekspresi = '';
       akumulator = 0;
-      opPending = "";
-      op = "";
+      opPending = '';
+      op = '';
       adaError = false;
       entryBaru = true;
     }
     layar = _stripBacktick(layar);
     if (entryBaru) {
-      layar = (t == ".") ? "0." : t;
+      layar = (t == '.') ? '0.' : t;
       entryBaru = false;
       adaQtyHitung = false;
     } else {
-      if (t == "." && layar.contains(".")) return;
-      if (layar.replaceAll("-", "").replaceAll(".", "").length >= 12) return;
-      if (layar == "0" && t != ".") {
+      if (t == '.' && layar.contains('.')) return;
+      if (layar.replaceAll('-', '').replaceAll('.', '').length >= 12) return;
+      if (layar == '0' && t != '.') {
         layar = t;
       } else {
         layar += t;
@@ -4071,14 +4071,14 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (opPending.isNotEmpty && entryBaru) {
       opPending = t;
       op = t;
-      ekspresi = "${formatHasil(akumulator)} $t";
+      ekspresi = '${formatHasil(akumulator)} $t';
       entryBaru = true;
       return;
     }
     if (opPending.isNotEmpty && !entryBaru) {
       final h = hitungDasar(akumulator, opPending, cur);
       if (h == null) {
-        layar = "E";
+        layar = 'E';
         adaError = true;
         return;
       }
@@ -4093,7 +4093,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     }
     opPending = t;
     op = t;
-    ekspresi = "${formatHasil(akumulator)} $t";
+    ekspresi = '${formatHasil(akumulator)} $t';
     entryBaru = true;
   }
 
@@ -4122,12 +4122,12 @@ class _S extends ConsumerState<HomeDaftarPO> {
     }
     final h = hitungDasar(a, o, b);
     if (h == null) {
-      layar = "E";
-      ekspresi = "${formatHasil(a)} $o ${formatHasil(b)} = E";
+      layar = 'E';
+      ekspresi = '${formatHasil(a)} $o ${formatHasil(b)} = E';
       adaError = true;
       return;
     }
-    ekspresi = "${formatHasil(a)} $o ${formatHasil(b)} = ${formatHasil(h)}";
+    ekspresi = '${formatHasil(a)} $o ${formatHasil(b)} = ${formatHasil(h)}';
     final hargaB = barangDipilih == null
         ? -1.0
         : (double.tryParse('${barangDipilih!["harga1"]}') ?? -1);
@@ -4144,30 +4144,29 @@ class _S extends ConsumerState<HomeDaftarPO> {
     _qtyMPlus = qtyStep;
     final namaB = barangDipilih == null ? '' : '${barangDipilih!["nama"]} : ';
     steps.add({
-      "item": "$namaB$ekspresi",
-      "rumus": ekspresi,
-      "harga": hargaStep,
-      "qty": qtyStep,
-      "jumlah": h,
-      "chain": >[],
+      'item': '$namaB$ekspresi',
+      'rumus': ekspresi,
+      'harga': hargaStep,
+      'qty': qtyStep,
+      'jumlah': h,
+      'chain': >[],
     });
     akumulator = h;
     angka1 = h;
     layar = formatHasil(h);
-    opPending = "";
-    op = "";
+    opPending = '';
+    op = '';
     entryBaru = true;
   }
 
   void _akhiriSatuPO() {
     _commitSemuaBarisPO();
     _simpanSemuaKeDB();
-    final total = ref.read(poProvider).items.fold<double>(
-        0, (a, e) => a + (e.qty.toDouble() * e.hargaSatuan.toDouble()));
+    final hasilHitung = hitungPO(ref.read(poProvider));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-            'PO ${_nomorPO()} selesai - Total ${formatRupiah(total.round())} - ketik PO berikutnya'),
+            'PO ${_nomorPO()} selesai - Total ${formatRupiah(hasilHitung.totalAkhir)} - ketik PO berikutnya'),
       ),
     );
     setState(() {
@@ -4181,15 +4180,15 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (adaError) return;
     final cur = double.tryParse(_stripBacktick(layar)) ?? 0;
     double h;
-    if (opPending == "+") {
+    if (opPending == '+') {
       h = akumulator + (akumulator * cur / 100);
-    } else if (opPending == "-") {
+    } else if (opPending == '-') {
       h = akumulator - (akumulator * cur / 100);
-    } else if (opPending == "x") {
+    } else if (opPending == 'x') {
       h = akumulator * cur / 100;
-    } else if (opPending == "÷" || opPending == "/") {
+    } else if (opPending == '÷' || opPending == '/') {
       if (cur == 0) {
-        layar = "E";
+        layar = 'E';
         adaError = true;
         return;
       }
@@ -4198,20 +4197,20 @@ class _S extends ConsumerState<HomeDaftarPO> {
       h = cur / 100;
     }
     ekspresi = opPending.isEmpty
-        ? "$cur% = ${formatHasil(h)}"
-        : "${formatHasil(akumulator)} $opPending $cur% = ${formatHasil(h)}";
+        ? '$cur% = ${formatHasil(h)}'
+        : '${formatHasil(akumulator)} $opPending $cur% = ${formatHasil(h)}';
     steps.add({
-      "item": ekspresi,
-      "rumus": ekspresi,
-      "harga": akumulator,
-      "qty": cur,
-      "jumlah": h,
+      'item': ekspresi,
+      'rumus': ekspresi,
+      'harga': akumulator,
+      'qty': cur,
+      'jumlah': h,
     });
     layar = formatHasil(h);
     akumulator = h;
     angka1 = h;
-    opPending = "";
-    op = "";
+    opPending = '';
+    op = '';
     entryBaru = true;
   }
 
@@ -4222,13 +4221,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
     final pajak = v * tarifPajak / 100;
     layar = formatHasil(v + pajak);
     ekspresi =
-        "${formatHasil(v)} TAX+ $tarifPajak% = ${formatHasil(v + pajak)}";
+        '${formatHasil(v)} TAX+ $tarifPajak% = ${formatHasil(v + pajak)}';
     steps.add({
-      "item": ekspresi,
-      "rumus": ekspresi,
-      "harga": v,
-      "qty": tarifPajak,
-      "jumlah": v + pajak,
+      'item': ekspresi,
+      'rumus': ekspresi,
+      'harga': v,
+      'qty': tarifPajak,
+      'jumlah': v + pajak,
     });
     entryBaru = true;
   }
@@ -4238,13 +4237,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
     final bersih = v / (1 + tarifPajak / 100);
     layar = formatHasil(bersih);
     ekspresi =
-        "${formatHasil(v)} TAX- $tarifPajak% = ${formatHasil(bersih)}";
+        '${formatHasil(v)} TAX- $tarifPajak% = ${formatHasil(bersih)}';
     steps.add({
-      "item": ekspresi,
-      "rumus": ekspresi,
-      "harga": v,
-      "qty": tarifPajak,
-      "jumlah": bersih,
+      'item': ekspresi,
+      'rumus': ekspresi,
+      'harga': v,
+      'qty': tarifPajak,
+      'jumlah': bersih,
     });
     entryBaru = true;
   }
@@ -4253,7 +4252,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     final v = _angkaLayar();
     if (v >= 0 && v <= 100) {
       tarifPajak = v;
-      ekspresi = "SET TAX = ${formatHasil(v)}%";
+      ekspresi = 'SET TAX = ${formatHasil(v)}%';
       layar = formatHasil(v);
       entryBaru = true;
     }
@@ -4261,14 +4260,14 @@ class _S extends ConsumerState<HomeDaftarPO> {
 
   void _pencetCost() {
     laciCost = _angkaLayar();
-    ekspresi = "COST = ${formatHasil(laciCost)}";
+    ekspresi = 'COST = ${formatHasil(laciCost)}';
     entryBaru = true;
     _hitungCSM();
   }
 
   void _pencetSell() {
     laciSell = _angkaLayar();
-    ekspresi = "SELL = ${formatHasil(laciSell)}";
+    ekspresi = 'SELL = ${formatHasil(laciSell)}';
     entryBaru = true;
     _hitungCSM();
   }
@@ -4277,7 +4276,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
     final v = _angkaLayar();
     if (v > 0 && v < 100) {
       laciMargin = v;
-      ekspresi = "MARGIN = ${formatHasil(v)}%";
+      ekspresi = 'MARGIN = ${formatHasil(v)}%';
       entryBaru = true;
       _hitungCSM();
     }
@@ -4287,26 +4286,26 @@ class _S extends ConsumerState<HomeDaftarPO> {
     if (laciCost > 0 && laciMargin > 0 && laciMargin < 100 && laciSell == 0) {
       laciSell = laciCost / (1 - laciMargin / 100);
       layar = formatHasil(laciSell);
-      ekspresi = "SELL = COST / (1 - MARGIN) = ${formatHasil(laciSell)}";
+      ekspresi = 'SELL = COST / (1 - MARGIN) = ${formatHasil(laciSell)}';
     } else if (laciSell > 0 &&
         laciMargin > 0 &&
         laciMargin < 100 &&
         laciCost == 0) {
       laciCost = laciSell * (1 - laciMargin / 100);
       layar = formatHasil(laciCost);
-      ekspresi = "COST = SELL x (1 - MARGIN) = ${formatHasil(laciCost)}";
+      ekspresi = 'COST = SELL x (1 - MARGIN) = ${formatHasil(laciCost)}';
     } else if (laciCost > 0 && laciSell > 0 && laciSell != laciCost) {
       laciMargin = (laciSell - laciCost) / laciSell * 100;
       layar = formatHasil(laciMargin);
-      ekspresi = "MARGIN = (SELL - COST) / SELL = ${formatHasil(laciMargin)}%";
+      ekspresi = 'MARGIN = (SELL - COST) / SELL = ${formatHasil(laciMargin)}%';
     }
     if (laciCost > 0 || laciSell > 0 || laciMargin > 0) {
       steps.add({
-        "item": ekspresi,
-        "rumus": ekspresi,
-        "harga": laciCost,
-        "qty": laciMargin,
-        "jumlah": laciSell,
+        'item': ekspresi,
+        'rumus': ekspresi,
+        'harga': laciCost,
+        'qty': laciMargin,
+        'jumlah': laciSell,
       });
     }
   }
@@ -4315,22 +4314,22 @@ class _S extends ConsumerState<HomeDaftarPO> {
     laciCost = 0;
     laciSell = 0;
     laciMargin = 0;
-    ekspresi = "COST / SELL / MARGIN direset";
+    ekspresi = 'COST / SELL / MARGIN direset';
   }
 
   void _gantiRound() {
-    modeRound = modeRound == "5/4"
-        ? "CUT"
-        : modeRound == "CUT"
-            ? "F"
-            : "5/4";
-    ekspresi = "ROUND = $modeRound";
+    modeRound = modeRound == '5/4'
+        ? 'CUT'
+        : modeRound == 'CUT'
+            ? 'F'
+            : '5/4';
+    ekspresi = 'ROUND = $modeRound';
     layar = formatHasil(_angkaLayar());
   }
 
   void _gantiAdd2() {
     modeAdd2 = !modeAdd2;
-    ekspresi = modeAdd2 ? "ADD2 ON: ketik 123 -> 1.23" : "ADD2 OFF";
+    ekspresi = modeAdd2 ? 'ADD2 ON: ketik 123 -> 1.23' : 'ADD2 OFF';
   }
 
   double _terapkanAdd2(double v) => modeAdd2 ? v / 100 : v;
@@ -4338,7 +4337,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
   double get totalCek {
     double t = 0;
     for (final s in steps) {
-      t += (s["jumlah"] as num?)?.toDouble() ?? 0;
+      t += (s['jumlah'] as num?)?.toDouble() ?? 0;
     }
     return t;
   }
@@ -4349,70 +4348,70 @@ class _S extends ConsumerState<HomeDaftarPO> {
     }
     HapticFeedback.lightImpact();
     setState(() {
-      if (t == "AC") {
-        layar = "0";
-        ekspresi = "";
+      if (t == 'AC') {
+        layar = '0';
+        ekspresi = '';
         akumulator = 0;
         angka1 = 0;
-        opPending = "";
-        op = "";
+        opPending = '';
+        op = '';
         entryBaru = true;
         adaError = false;
-        lastOp = "";
+        lastOp = '';
         lastAngka2 = 0;
         adaQtyHitung = false;
         qtyHitung = 1;
         _qtyMPlus = null;
         _hargaAcuanVarian = null;
-        _labelSaranVarian = "";
+        _labelSaranVarian = '';
         _hargaLayarDiubah = false;
-      } else if (t == "ON/C") {
-        layar = "0";
+      } else if (t == 'ON/C') {
+        layar = '0';
         entryBaru = true;
         adaError = false;
         _hargaLayarDiubah = false;
-      } else if (t == "OFF") {
-        layar = "0";
-        ekspresi = "";
+      } else if (t == 'OFF') {
+        layar = '0';
+        ekspresi = '';
         entryBaru = true;
         _hargaLayarDiubah = false;
-      } else if (t == "PO") {
+      } else if (t == 'PO') {
         _onTapTombolKuning('PO');
-      } else if (t == "LS") {
+      } else if (t == 'LS') {
         _onTapTombolKuning('LS');
-      } else if (t == "CEK") {
+      } else if (t == 'CEK') {
         _onTapTombolKuning('CEK');
-      } else if (t == "CPS") {
+      } else if (t == 'CPS') {
         _onTapTombolKuning('CPS');
-      } else if (t == "RIW") {
+      } else if (t == 'RIW') {
         _onTapTombolKuning('RIW');
-      } else if (t == "TAX+") {
+      } else if (t == 'TAX+') {
         _pencetTaxPlus();
-      } else if (t == "TAX-") {
+      } else if (t == 'TAX-') {
         _pencetTaxMin();
-      } else if (t == "SET TAX") {
+      } else if (t == 'SET TAX') {
         _setTax();
-      } else if (t == "COST") {
+      } else if (t == 'COST') {
         _pencetCost();
-      } else if (t == "SELL") {
+      } else if (t == 'SELL') {
         _pencetSell();
-      } else if (t == "MARGIN") {
+      } else if (t == 'MARGIN') {
         _pencetMargin();
-      } else if (t == "CSM CLR") {
+      } else if (t == 'CSM CLR') {
         _resetCSM();
-      } else if (t == "ROUND") {
+      } else if (t == 'ROUND') {
         _gantiRound();
-      } else if (t == "ADD2") {
+      } else if (t == 'ADD2') {
         _gantiAdd2();
-      } else if (t == "BEP") {
+      } else if (t == 'BEP') {
         if (hargaAcuan > 0) {
           layar = formatHasil(hargaAcuan * 1.1);
-          ekspresi = "BEP = Acuan x 110%";
+          ekspresi = 'BEP = Acuan x 110%';
         } else {
           layar = formatHasil((double.tryParse(_stripBacktick(layar)) ?? 0) + 120);
         }
         entryBaru = true;
-      } else if (t == "M+") {
+      } else if (t == 'M+') {
         final hargaTerpilihM = barangDipilih == null
             ? -1
             : (int.tryParse("${barangDipilih!["harga1"]}") ?? -1);
@@ -4455,16 +4454,16 @@ class _S extends ConsumerState<HomeDaftarPO> {
           }
           final idxStepBaru = steps.length;
           steps.add({
-            "item":
+            'item':
                 "${barangDipilih!["nama"]} : $qtyAman x ${formatRupiah(harga)} = ${formatRupiah(jumlah)}",
-            "rumus":
+            'rumus':
                 "${barangDipilih!["nama"]} : $qtyAman x ${formatRupiah(harga)} = ${formatRupiah(jumlah)}",
-            "harga": harga,
-            "qty": qtyAman,
-            "jumlah": jumlah,
-            "satuan": satuanBarang,
-            "chain": >[],
-            "opPecah": opLS,
+            'harga': harga,
+            'qty': qtyAman,
+            'jumlah': jumlah,
+            'satuan': satuanBarang,
+            'chain': >[],
+            'opPecah': opLS,
           });
           if (hargaVarianLS > 0 && isiLS > 0) {
             _acuanDariLS['step-$idxStepBaru'] = {
@@ -4487,10 +4486,10 @@ class _S extends ConsumerState<HomeDaftarPO> {
         }
         _hargaLayarDiubah = false;
         _habisMPlus = true;
-        layar = "0";
+        layar = '0';
         entryBaru = true;
         adaQtyHitung = false;
-      } else if (t == "M-") {
+      } else if (t == 'M-') {
         if (_mrIndex >= 0 && _mrJumlahBaris() > 0) {
           final idx = _mrIndex.clamp(0, _mrJumlahBaris() - 1);
           final hapus = _mrBaris(idx);
@@ -4508,8 +4507,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
           }
           if (_mrJumlahBaris() == 0) {
             _mrIndex = -1;
-            layar = "0";
-            ekspresi = "MR: semua baris sudah dihapus.";
+            layar = '0';
+            ekspresi = 'MR: semua baris sudah dihapus.';
             entryBaru = true;
           } else {
             if (_mrIndex >= _mrJumlahBaris()) _mrIndex = _mrJumlahBaris() - 1;
@@ -4544,7 +4543,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
             pesanM += 'Step terakhir CEK dihapus.';
           }
           if (pesanM.isEmpty) pesanM = 'Tidak ada baris PO / step CEK.';
-          layar = "0";
+          layar = '0';
           entryBaru = true;
           final pesanFinal = pesanM;
           Future.microtask(() {
@@ -4554,19 +4553,19 @@ class _S extends ConsumerState<HomeDaftarPO> {
             }
           });
         }
-      } else if (t == "MRT") {
+      } else if (t == 'MRT') {
         final totalStep = steps.fold<double>(
             0, (a, st) => a + (((st['jumlah'] as num?)?.toDouble() ?? 0)));
         _mrtTerbuka = !_mrtTerbuka;
         layar = formatHasil(totalStep);
-        ekspresi = "MRT = total ${steps.length} step";
+        ekspresi = 'MRT = total ${steps.length} step';
         entryBaru = true;
-      } else if (t == "MR") {
+      } else if (t == 'MR') {
         final nMR = _mrJumlahBaris();
         if (nMR == 0) {
           _mrIndex = -1;
-          layar = "0";
-          ekspresi = "MR: tidak ada baris M+.";
+          layar = '0';
+          ekspresi = 'MR: tidak ada baris M+.';
           entryBaru = true;
         } else {
           if (_mrIndex < 0) {
@@ -4579,7 +4578,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           ekspresi = "MR ${_mrIndex + 1}/$nMR • ${bMR['teks']}";
           entryBaru = true;
         }
-      } else if (t == "MC") {
+      } else if (t == 'MC') {
         final nPO = ref.read(poProvider).items.length;
         final nStep = steps.length;
         memori = 0;
@@ -4591,7 +4590,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
         _poTerpilih.clear();
         _bersihkanSemuaStatePecah('step');
         _disposeMapCtrls(_stepCtrls);
-        layar = "0";
+        layar = '0';
         entryBaru = true;
         final pesanFinal =
             'MC: semua M+ dibersihkan ($nPO baris PO + $nStep step CEK).';
@@ -4601,15 +4600,15 @@ class _S extends ConsumerState<HomeDaftarPO> {
                 .showSnackBar(SnackBar(content: Text(pesanFinal)));
           }
         });
-      } else if (t == "MU") {
+      } else if (t == 'MU') {
         final modal = double.tryParse(_stripBacktick(layar)) ?? 0;
         final jual = modal / (1 - 0.10);
-        ekspresi = "MU 10% dari ${formatHasil(modal)}";
+        ekspresi = 'MU 10% dari ${formatHasil(modal)}';
         layar = formatHasil(jual);
         entryBaru = true;
-      } else if (t == "▶" || t == "⌫") {
+      } else if (t == '▶' || t == '⌫') {
         if (adaError) {
-          layar = "0";
+          layar = '0';
           adaError = false;
           entryBaru = true;
         } else if (!entryBaru) {
@@ -4617,27 +4616,27 @@ class _S extends ConsumerState<HomeDaftarPO> {
           if (layar.length > 1) {
             layar = _groupBacktick(_stripBacktick(layar)
                 .substring(0, _stripBacktick(layar).length - 1));
-            if (layar.isEmpty || layar == "-") layar = "0";
+            if (layar.isEmpty || layar == '-') layar = '0';
           } else {
-            layar = "0";
+            layar = '0';
           }
         }
-      } else if (["+", "-", "x", "÷", "/"].contains(t)) {
+      } else if (['+', '-', 'x', '÷', '/'].contains(t)) {
         _inputOperator(t);
-      } else if (t == "=") {
+      } else if (t == '=') {
         if (modeAdd2 && opPending.isEmpty) {
           layar = formatHasil(_terapkanAdd2(_angkaLayar()));
         }
         _inputSamaDengan();
-      } else if (t == "+/-") {
+      } else if (t == '+/-') {
         if (adaError) return;
         _hargaLayarDiubah = true;
-        if (layar.startsWith("-")) {
+        if (layar.startsWith('-')) {
           layar = layar.substring(1);
-        } else if (layar != "0") {
-          layar = "-$layar";
+        } else if (layar != '0') {
+          layar = '-$layar';
         }
-      } else if (t == "%") {
+      } else if (t == '%') {
         _inputPersen();
       } else {
         _inputAngka(t);
@@ -4743,13 +4742,13 @@ class _S extends ConsumerState<HomeDaftarPO> {
       satuanPerVarian = [_satuanBaruKosong()];
       satuanList = [
         SatuanItem(
-            satuan: "",
+            satuan: '',
             dasar: true,
-            qty: "",
-            isi: "",
-            op: "x",
-            nominal: "",
-            satuanBaru: "")
+            qty: '',
+            isi: '',
+            op: 'x',
+            nominal: '',
+            satuanBaru: '')
       ];
     }
     _satuanCtrlDialog = null;
@@ -4774,7 +4773,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        edit ? "Edit Barang" : "Tambah Barang",
+                        edit ? 'Edit Barang' : 'Tambah Barang',
                         style: const TextStyle(
                             fontSize: 18, fontWeight: FontWeight.bold),
                       ),
@@ -4787,12 +4786,12 @@ class _S extends ConsumerState<HomeDaftarPO> {
                   Row(children: [
                     Expanded(
                         child: TextField(
-                            controller: kodeCtrl, decoration: dec("Code *"))),
+                            controller: kodeCtrl, decoration: dec('Code *'))),
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextField(
                         controller: namaCtrl,
-                        decoration: dec("Name *"),
+                        decoration: dec('Name *'),
                         onChanged: (_) => setSheet(() {}),
                       ),
                     ),
@@ -4809,12 +4808,12 @@ class _S extends ConsumerState<HomeDaftarPO> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text("Category • dropdown + tambah/delete",
+                          const Text('Category • dropdown + tambah/delete',
                               style: TextStyle(fontSize: 11)),
                           const SizedBox(height: 4),
                           DropdownButtonFormField<String>(
                             initialValue: kategoriPilih,
-                            decoration: dec("Kategori"),
+                            decoration: dec('Kategori'),
                             items: listKategori
                                 .map((e) => DropdownMenuItem(
                                     value: e,
@@ -4831,7 +4830,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                             Expanded(
                                 child: TextField(
                                     controller: kategoriBaruCtrl,
-                                    decoration: dec("Kategori baru"))),
+                                    decoration: dec('Kategori baru'))),
                             IconButton(
                               icon: const Icon(Icons.add),
                               onPressed: () {
@@ -4863,7 +4862,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                     Expanded(
                       child: TextField(
                         controller: unitCtrl,
-                        decoration: dec("Unit (Biru - auto sama)"),
+                        decoration: dec('Unit (Biru - auto sama)'),
                         onChanged: (v) {
                           for (var g in satuanPerVarian) {
                             final dasar = g.firstWhere((x) => x.dasar == true,
@@ -4879,7 +4878,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("Varian",
+                      const Text('Varian',
                           style: TextStyle(fontWeight: FontWeight.bold)),
                       ElevatedButton(
                         onPressed: () => setSheet(() {
@@ -4887,7 +4886,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           hargaCtrls.add(TextEditingController());
                           satuanPerVarian.add(_satuanBaruKosong());
                         }),
-                        child: const Text("+Tambah Varian",
+                        child: const Text('+Tambah Varian',
                             style: TextStyle(fontSize: 11)),
                       ),
                     ],
@@ -4908,7 +4907,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(children: [
-                            Text("Varian ${gi + 1}",
+                            Text('Varian ${gi + 1}',
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.teal)),
@@ -4930,7 +4929,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           const SizedBox(height: 4),
                           TextField(
                             controller: ve.value,
-                            decoration: dec("Varian"),
+                            decoration: dec('Varian'),
                             onChanged: (v) {
                               tambahKeDaftarSatuan(v);
                               setSheet(() {});
@@ -4939,7 +4938,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           _chipSaranForm(
                               _saranVarian(ve.value.text), ve.value, setSheet),
                           const SizedBox(height: 10),
-                          Text("Harga ${gi + 1} • Acuan 100%",
+                          Text('Harga ${gi + 1} • Acuan 100%',
                               style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
@@ -4948,7 +4947,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           TextField(
                             controller: hargaCtrls[gi],
                             keyboardType: TextInputType.number,
-                            decoration: dec("0"),
+                            decoration: dec('0'),
                             onChanged: (v) => setSheet(() {
                               for (var x in grup) {
                                 refreshNominal(x, hargaTeks: v);
@@ -4959,7 +4958,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text("Satuan",
+                              const Text('Satuan',
                                   style:
                                       TextStyle(fontWeight: FontWeight.bold)),
                               ElevatedButton(
@@ -4967,19 +4966,19 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                   grup.add(SatuanItem(
                                       satuan: unitCtrl.text,
                                       dasar: false,
-                                      qty: "1",
-                                      isi: "1",
-                                      op: "÷",
-                                      nominal: "0",
-                                      satuanBaru: ""));
+                                      qty: '1',
+                                      isi: '1',
+                                      op: '÷',
+                                      nominal: '0',
+                                      satuanBaru: ''));
                                 }),
-                                child: const Text("+Tambah Satuan",
+                                child: const Text('+Tambah Satuan',
                                     style: TextStyle(fontSize: 11)),
                               ),
                             ],
                           ),
                           const Text(
-                            "Qty + satuan BIRU, x/÷, isi + unit HIJAU = nominal. Baris bawah (merah) = INFO dari Harga varian ini, bukan dari field Rp.",
+                            'Qty + satuan BIRU, x/÷, isi + unit HIJAU = nominal. Baris bawah (merah) = INFO dari Harga varian ini, bukan dari field Rp.',
                             style: TextStyle(fontSize: 10, color: Colors.grey),
                           ),
                           const SizedBox(height: 6),
@@ -5000,7 +4999,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                   children: [
                                     _AutoField(
                                       controller: it.qtyCtrl,
-                                      hint: "1",
+                                      hint: '1',
                                       angka: true,
                                       min: 44,
                                       max: 70,
@@ -5012,7 +5011,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                     ),
                                     _AutoField(
                                       controller: it.namaCtrl,
-                                      hint: "satuan",
+                                      hint: 'satuan',
                                       min: 52,
                                       max: 100,
                                       onTap: () => setSheet(
@@ -5028,7 +5027,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                       height: 36,
                                       child: InkWell(
                                         onTap: () => setSheet(() {
-                                          it.op = it.op == "x" ? "÷" : "x";
+                                          it.op = it.op == 'x' ? '÷' : 'x';
                                           it.nominalManual = false;
                                           refreshNominal(it,
                                               hargaTeks: hargaCtrls[gi].text);
@@ -5036,7 +5035,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                         borderRadius: BorderRadius.circular(18),
                                         child: Container(
                                           decoration: BoxDecoration(
-                                            color: it.op == "÷"
+                                            color: it.op == '÷'
                                                 ? Colors.teal.shade100
                                                 : Colors.orange.shade100,
                                             shape: BoxShape.circle,
@@ -5056,7 +5055,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                     ),
                                     _AutoField(
                                       controller: it.isiCtrl,
-                                      hint: "isi",
+                                      hint: 'isi',
                                       angka: true,
                                       min: 44,
                                       max: 70,
@@ -5068,7 +5067,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                     ),
                                     _AutoField(
                                       controller: it.satuanBaruCtrl,
-                                      hint: "unit",
+                                      hint: 'unit',
                                       min: 52,
                                       max: 100,
                                       onTap: () => setSheet(() =>
@@ -5084,7 +5083,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                       constraints: const BoxConstraints(
                                           minWidth: 30, minHeight: 30),
                                       tooltip:
-                                          it.dasar ? "Dasar" : "Jadikan dasar",
+                                          it.dasar ? 'Dasar' : 'Jadikan dasar',
                                       icon: Icon(
                                         it.dasar
                                             ? Icons.check_circle
@@ -5140,8 +5139,8 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                   keyboardType: TextInputType.number,
                                   style: const TextStyle(fontSize: 13),
                                   decoration: dec(
-                                      "nominal - harga jual per unit hijau (boleh edit)",
-                                      prefix: "Rp "),
+                                      'nominal - harga jual per unit hijau (boleh edit)',
+                                      prefix: 'Rp '),
                                   onTap: () => it.nominalManual = true,
                                   onChanged: (_) {
                                     it.nominalManual = true;
@@ -5158,7 +5157,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
-                                    "INFO: ${teksRumusSatuan(it, hargaTeks: hargaCtrls[gi].text)}",
+                                    'INFO: ${teksRumusSatuan(it, hargaTeks: hargaCtrls[gi].text)}',
                                     style: const TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
@@ -5182,7 +5181,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                       style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.teal),
                       onPressed: () {
-                        final varian = varianCtrls.map((c) => c.text).join(", ");
+                        final varian = varianCtrls.map((c) => c.text).join(', ');
                         for (var c in varianCtrls) {
                           tambahKeDaftarSatuan(c.text);
                         }
@@ -5214,17 +5213,17 @@ class _S extends ConsumerState<HomeDaftarPO> {
                           final gabunganSimpan =
                               satuanPerVarianSimpan.expand((g) => g).toList();
                           final barangBaru = {
-                            "kode": kodeCtrl.text,
-                            "nama": namaCtrl.text,
-                            "kategori": kategoriPilih,
-                            "harga1": hargaListSimpan.isEmpty
+                            'kode': kodeCtrl.text,
+                            'nama': namaCtrl.text,
+                            'kategori': kategoriPilih,
+                            'harga1': hargaListSimpan.isEmpty
                                 ? ''
                                 : hargaListSimpan.first,
-                            "hargaList": hargaListSimpan,
-                            "satuan": unitCtrl.text,
-                            "varian": varian,
-                            "satuanList": gabunganSimpan,
-                            "satuanPerVarian": satuanPerVarianSimpan,
+                            'hargaList': hargaListSimpan,
+                            'satuan': unitCtrl.text,
+                            'varian': varian,
+                            'satuanList': gabunganSimpan,
+                            'satuanPerVarian': satuanPerVarianSimpan,
                           };
                           harga1Ctrl.text =
                               hargaCtrls.isEmpty ? '' : hargaCtrls.first.text;
@@ -5241,36 +5240,36 @@ class _S extends ConsumerState<HomeDaftarPO> {
                               .toList();
                           if (edit) {
                             final idx = daftarBarang
-                                .indexWhere((x) => x["kode"] == kodeLama);
+                                .indexWhere((x) => x['kode'] == kodeLama);
                             if (idx >= 0) {
                               daftarBarang[idx] = barangBaru;
                             } else {
                               daftarBarang.add(barangBaru);
                             }
                             if (barangDipilih != null &&
-                                barangDipilih!["kode"] == kodeLama) {
+                                barangDipilih!['kode'] == kodeLama) {
                               barangDipilih = {
-                                "kode": kodeCtrl.text,
-                                "nama": namaCtrl.text,
-                                "kategori": kategoriPilih,
-                                "harga1": hargaListSimpan.isEmpty
+                                'kode': kodeCtrl.text,
+                                'nama': namaCtrl.text,
+                                'kategori': kategoriPilih,
+                                'harga1': hargaListSimpan.isEmpty
                                     ? ''
                                     : hargaListSimpan.first,
                               };
                             }
                           } else {
                             final idxSama = daftarBarang.indexWhere(
-                                (x) => x["kode"] == kodeCtrl.text);
+                                (x) => x['kode'] == kodeCtrl.text);
                             if (idxSama >= 0) {
                               daftarBarang[idxSama] = barangBaru;
                             } else {
                               daftarBarang.add(barangBaru);
                             }
                             barangDipilih = {
-                              "kode": kodeCtrl.text,
-                              "nama": namaCtrl.text,
-                              "kategori": kategoriPilih,
-                              "harga1": hargaListSimpan.isEmpty
+                              'kode': kodeCtrl.text,
+                              'nama': namaCtrl.text,
+                              'kategori': kategoriPilih,
+                              'harga1': hargaListSimpan.isEmpty
                                   ? ''
                                   : hargaListSimpan.first,
                             };
@@ -5280,7 +5279,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                         Navigator.pop(ctx);
                       },
                       child: Text(
-                        edit ? "Update Barang" : "Simpan Barang",
+                        edit ? 'Update Barang' : 'Simpan Barang',
                         style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.bold),
                       ),
@@ -5364,7 +5363,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
-              "BASKORO WINGCHUN",
+              'BASKORO WINGCHUN',
               style: TextStyle(
                   color: Colors.white,
                   fontSize: 11,
@@ -5381,7 +5380,7 @@ class _S extends ConsumerState<HomeDaftarPO> {
                   border: Border.all(color: Colors.white, width: 1.2),
                 ),
                 child: const Text(
-                  "BABE•INFO",
+                  'BABE•INFO',
                   style: TextStyle(
                       color: Colors.black,
                       fontSize: 11,
@@ -5425,164 +5424,141 @@ class _S extends ConsumerState<HomeDaftarPO> {
             SizedBox(
               height: 16,
               width: double.infinity,
-              child: DotMatrixText(
-                text: _layarAtasCasio().isEmpty ? ' ' : _layarAtasCasio(),
-                size: DotMatrixSize.small,
-                color: Colors.black54,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    _layarAtasCasio(),
+                    style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.black54,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(
+              height: 36,
+              width: double.infinity,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    _layarBawahCasio(),
+                    style: const TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 2),
-            SizedBox(
-              height: 26,
-              child: Row(children: [
-                Expanded(
-                  child: Text(
-                    teksAcuan(),
-                    style: const TextStyle(fontSize: 12, color: Colors.black54),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerRight,
-                    child: DotMatrixText(
-                      text: _layarBawahCasio(),
-                      size: DotMatrixSize.nota,
-                      color: adaError ? Colors.red : Colors.black,
-                    ),
-                  ),
-                ),
-              ]),
-            ),
-            const SizedBox(height: 2),
-            SizedBox(
-              height: 14,
-              child: Row(children: [
-                Expanded(
-                  child: Text(
-                    barangDipilih == null
-                        ? "Pilih barang via LS"
-                        : "${barangDipilih!["nama"]} • ${barangDipilih!["kategori"]}",
-                    style: const TextStyle(fontSize: 9, color: Colors.black54),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
                 Text(
-                  teksSaran(),
+                  barangDipilih == null
+                      ? 'Belum pilih barang'
+                      : "${barangDipilih!["nama"]} (${formatRupiah(int.tryParse("${barangDipilih!["harga1"]}") ?? 0)})",
+                  style: const TextStyle(fontSize: 11, color: Colors.black87),
+                ),
+                Text(
+                  '${teksAcuan()}  |  ${teksSaran()}',
                   style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
                       color: warnaSaran()),
                 ),
-              ]),
+              ],
             ),
           ]),
         ),
         const SizedBox(height: 6),
         Row(children: [
           Expanded(
-            flex: 2,
-            child: InkWell(
-              onTap: () => setState(() {
-                modeHitung =
-                    modeHitung == "PEMBULATAN" ? "ORIGINAL" : "PEMBULATAN";
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.receipt_long, size: 16),
+              label: const Text('NOTA', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+              onPressed: _tampilNota,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.share, size: 16),
+              label: const Text('SHARE', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1F2A44),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+              onPressed: _kirimWA,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.list_alt, size: 16),
+              label: const Text('PO ITEM', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F766E),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+              onPressed: () => setState(() {
+                if (poTerbuka) {
+                  _commitSemuaBarisPO();
+                  poTerbuka = false;
+                  _resetKeyboard();
+                } else {
+                  poTerbuka = true;
+                  _tombolKuningAktif = '';
+                  _resetKeyboard();
+                }
               }),
-              child: Container(
-                height: 28,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(16)),
-                child: Row(children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10)),
-                    child: const Text(
-                      "5/4",
-                      style:
-                          TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      modeHitung,
-                      style: const TextStyle(color: Colors.white, fontSize: 9),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ]),
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: SizedBox(
-              height: 28,
-              child: SegmentedButton<int>(
-                segments: const [
-                  ButtonSegment(
-                      value: 0, label: Text("0", style: TextStyle(fontSize: 9))),
-                  ButtonSegment(
-                      value: 2, label: Text("2", style: TextStyle(fontSize: 9))),
-                  ButtonSegment(
-                      value: 3, label: Text("3", style: TextStyle(fontSize: 9))),
-                ],
-                selected: {desimal},
-                onSelectionChanged: (s) => setState(() => desimal = s.first),
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: SizedBox(
-              height: 28,
-              child: FilledButton(
-                onPressed: _kirimWA,
-                style: FilledButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    textStyle: const TextStyle(fontSize: 10)),
-                child: const Text("Kirim WA"),
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: SizedBox(
-              height: 28,
-              child: OutlinedButton(
-                onPressed: _tampilNota,
-                style: OutlinedButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  textStyle: const TextStyle(fontSize: 9),
-                  backgroundColor: Colors.white,
-                ),
-                child: const Text("Nota"),
-              ),
             ),
           ),
         ]),
       ]),
     );
     return Scaffold(
-      backgroundColor: const Color(0xFFE8E0C8),
+      backgroundColor: const Color(0xFF1A1A1A),
       body: SafeArea(
-        child: Column(children: [
-          headerKalkulator,
-          _panelForm(),
-          if (poTerbuka) Expanded(child: _panelDaftarItemPO()),
-          if (!poTerbuka) _stripTengah(),
-          if (_mrtTerbuka) _stripMRT(),
-          Expanded(child: _areaTombolBawah()),
-        ]),
+        child: poTerbuka
+            ? Column(children: [
+                headerKalkulator,
+                Expanded(child: _panelDaftarItemPO()),
+                if (_modeKeyboard != 0)
+                  SizedBox(
+                    height: 250,
+                    child: Container(
+                      color: const Color(0xFF222222),
+                      child: _areaTombolBawah(),
+                    ),
+                  ),
+              ])
+            : Column(children: [
+                headerKalkulator,
+                _stripTengah(),
+                if (_mrtTerbuka) _stripMRT(),
+                _panelForm(),
+                Expanded(
+                  child: Container(
+                    color: const Color(0xFF222222),
+                    child: _areaTombolBawah(),
+                  ),
+                ),
+              ]),
       ),
     );
   }
